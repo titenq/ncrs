@@ -9,14 +9,25 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 ## 🛡️ Key Features
 
 - **Asynchronous Full-Duplex I/O:** Simultaneous bidirectional communication using `tokio::select!`.
+
 - **TLS 1.3 Encryption:** Native support for secure tunnels in both Client and Server modes.
+
 - **Port Scanning (-z):** High-speed asynchronous port scanning with range support (e.g., 20-100).
+
 - **UDP Support (-u):** Bidirectional datagram communication for both Client and Server modes.
+
 - **Smart Timeout (-w):** Applies to both DNS resolution and TCP connection establishment.
+
 - **IPv6 Ready (-6):** Full support for modern IPv6 addressing and dual-stack connectivity.
+
+- **Line Ending Control (-C):** Optional CRLF (\r\n) support for compatibility with strict protocols like HTTP and SMTP.
+
 - **Intuitive CLI:** Powered by `clap` for a professional command-line experience.
+
 - **Custom Banner:** Professional identity with ASCII art branding.
+
 - **Memory Safety:** Built with Rust's strict safety guarantees, eliminating common C-based vulnerabilities like buffer overflows.
+
 - **Static Binaries:** Easy to distribute without worrying about complex system dependencies.
 
 ---
@@ -24,9 +35,13 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 ## 🛠️ Tech Stack
 
 *   **Rust:** Core language for performance and memory safety.
+
 *   **Tokio:** The industry-standard asynchronous runtime for Rust.
+
 *   **Rustls:** A modern, fast, and safe TLS library (no OpenSSL dependency for the binary).
+
 *   **Clap:** Powerful command-line argument parsing.
+
 *   **Colored:** Terminal-based visual feedback with colors.
 
 ## 📋 Requirements
@@ -109,6 +124,14 @@ ncrs 8.8.8.8 80 -w 10
 ncrs ::1 8080 -v
 ```
 
+**Testing HTTP (Requires -C):**
+```bash
+ncrs google.com 80 -v -C
+# Once connected, type:
+GET / HTTP/1.1
+Host: google.com
+(Press Enter twice)
+```
 ---
 
 ### Network Auditing (Example: Google)

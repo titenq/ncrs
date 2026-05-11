@@ -45,6 +45,10 @@ struct Args {
     /// [Flag: -6] IPv6 mode: force usage of IPv6 addresses
     #[arg(short = '6', long)]
     ipv6: bool,
+
+    /// [Flag: -C] Send CRLF as line-ending instead of just LF
+    #[arg(short = 'C', long)]
+    crlf: bool,
 }
 
 #[tokio::main]
@@ -75,9 +79,8 @@ async fn main() -> anyhow::Result<()> {
             .unwrap_or_else(|| all_ports.first().copied().unwrap_or(4444));
         core::run_udp_node(args.target, port, args.listen, args.verbose).await?;
     } else if args.listen {
-        // Listen
         let port = args.p_port.unwrap_or(4444);
-        core::run_server(port, args.verbose, args.secure, args.ipv6).await?;
+        core::run_server(port, args.verbose, args.secure, args.ipv6, args.crlf).await?;
     } else if let (Some(target), Some(&port)) = (args.target, all_ports.first()) {
         core::run_client(
             target,
@@ -86,6 +89,7 @@ async fn main() -> anyhow::Result<()> {
             args.secure,
             args.timeout,
             args.ipv6,
+            args.crlf,
         )
         .await?;
     } else {

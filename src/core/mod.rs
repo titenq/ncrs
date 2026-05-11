@@ -17,6 +17,7 @@ pub async fn run_client(
     secure: bool,
     timeout_secs: u64,
     ipv6: bool,
+    crlf: bool,
 ) -> anyhow::Result<()> {
     let addr = if ipv6 && !target.contains('[') && target.contains(':') {
         format!("[{}]:{}", target, port)
@@ -31,20 +32,43 @@ pub async fn run_client(
 
     let timeout_duration = std::time::Duration::from_secs(timeout_secs);
 
-    if verbose { println!("{} Resolving address...", "[*]".yellow()); }
-    
-    let mut addrs = match tokio::time::timeout(timeout_duration, tokio::net::lookup_host(&addr)).await {
-        Ok(Ok(iter)) => iter,
-        Ok(Err(e)) => return Err(anyhow::anyhow!("Failed to resolve {}: {}", addr, e)),
-        Err(_) => return Err(anyhow::anyhow!("DNS resolution timed out after {}s", timeout_secs)),
-    };
+    if verbose {
+        println!("{} Resolving address...", "[*]".yellow());
+    }
 
-    let target_addr = addrs.next().ok_or_else(|| anyhow::anyhow!("Could not resolve to any IP address"))?;
+    let mut addrs =
+        match tokio::time::timeout(timeout_duration, tokio::net::lookup_host(&addr)).await {
+            Ok(Ok(iter)) => iter,
+            Ok(Err(e)) => return Err(anyhow::anyhow!("Failed to resolve {}: {}", addr, e)),
+            Err(_) => {
+                return Err(anyhow::anyhow!(
+                    "DNS resolution timed out after {}s",
+                    timeout_secs
+                ));
+            }
+        };
 
-    let stream = match tokio::time::timeout(timeout_duration, TcpStream::connect(target_addr)).await {
+    let target_addr = addrs
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("Could not resolve to any IP address"))?;
+
+    let stream = match tokio::time::timeout(timeout_duration, TcpStream::connect(target_addr)).await
+    {
         Ok(Ok(s)) => s,
-        Ok(Err(e)) => return Err(anyhow::anyhow!("Failed to connect to {}: {}", target_addr, e)),
-        Err(_) => return Err(anyhow::anyhow!("Connection to {} timed out after {}s", target_addr, timeout_secs)),
+        Ok(Err(e)) => {
+            return Err(anyhow::anyhow!(
+                "Failed to connect to {}: {}",
+                target_addr,
+                e
+            ));
+        }
+        Err(_) => {
+            return Err(anyhow::anyhow!(
+                "Connection to {} timed out after {}s",
+                target_addr,
+                timeout_secs
+            ));
+        }
     };
 
     if secure {
@@ -67,13 +91,30 @@ pub async fn run_client(
         let domain = ServerName::try_from(target.as_str())?.to_owned();
         let tls_stream = connector.connect(domain, stream).await?;
 
-        handle_duplex(tls_stream).await
+        if verbose {
+            println!(
+                "{} Connected! Type your messages and press Enter.",
+                "[+]".green()
+            );
+            
+            if crlf {
+                println!("{} CRLF mode active (\\n is sent as \\r\\n)", "[*]".blue());
+            }
+        }
+
+        handle_duplex(tls_stream, crlf).await
     } else {
-        handle_duplex(stream).await
+        handle_duplex(stream, crlf).await
     }
 }
 
-pub async fn run_server(port: u16, verbose: bool, secure: bool, ipv6: bool) -> anyhow::Result<()> {
+pub async fn run_server(
+    port: u16,
+    verbose: bool,
+    secure: bool,
+    ipv6: bool,
+    crlf: bool,
+) -> anyhow::Result<()> {
     let addr = if ipv6 {
         format!("[::]:{}", port)
     } else {
@@ -117,9 +158,9 @@ pub async fn run_server(port: u16, verbose: bool, secure: bool, ipv6: bool) -> a
             println!("{} TLS Handshake successful!", "[+]".green());
         }
 
-        handle_duplex(tls_stream).await
+        handle_duplex(tls_stream, crlf).await
     } else {
-        handle_duplex(stream).await
+        handle_duplex(stream, crlf).await
     }
 }
 
@@ -163,17 +204,53 @@ pub async fn run_port_scan(
     Ok(())
 }
 
-async fn handle_duplex<S>(stream: S) -> anyhow::Result<()>
+async fn handle_duplex<S>(stream: S, crlf: bool) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
     let (mut reader, mut writer) = io::split(stream);
-    let t1 = tokio::spawn(async move { io::copy(&mut io::stdin(), &mut writer).await });
-    let t2 = tokio::spawn(async move { io::copy(&mut reader, &mut io::stdout()).await });
+
+    let stdin_to_socket = tokio::spawn(async move {
+        let mut stdin = io::stdin();
+        let mut buf = [0u8; 1024];
+
+        loop {
+            let n = stdin.read(&mut buf).await?;
+            if n == 0 {
+                break;
+            }
+
+            if crlf {
+                let mut data = Vec::with_capacity(n * 2);
+
+                for &byte in &buf[..n] {
+                    if byte == b'\n' {
+                        data.push(b'\r');
+                    }
+                    data.push(byte);
+                }
+
+                writer.write_all(&data).await?;
+            } else {
+                writer.write_all(&buf[..n]).await?;
+            }
+
+            writer.flush().await?;
+        }
+
+        anyhow::Ok(())
+    });
+
+    let socket_to_stdout = tokio::spawn(async move {
+        let mut stdout = io::stdout();
+        io::copy(&mut reader, &mut stdout).await
+    });
+
     tokio::select! {
-        res = t1 => { res??; },
-        res = t2 => { res??; },
+        res = stdin_to_socket => { res??; },
+        res = socket_to_stdout => { res??; },
     }
+
     Ok(())
 }
 
