@@ -30,11 +30,21 @@ pub async fn run_client(
     }
 
     let timeout_duration = std::time::Duration::from_secs(timeout_secs);
+
+    if verbose { println!("{} Resolving address...", "[*]".yellow()); }
     
-    let stream = match tokio::time::timeout(timeout_duration, TcpStream::connect(&addr)).await {
+    let mut addrs = match tokio::time::timeout(timeout_duration, tokio::net::lookup_host(&addr)).await {
+        Ok(Ok(iter)) => iter,
+        Ok(Err(e)) => return Err(anyhow::anyhow!("Failed to resolve {}: {}", addr, e)),
+        Err(_) => return Err(anyhow::anyhow!("DNS resolution timed out after {}s", timeout_secs)),
+    };
+
+    let target_addr = addrs.next().ok_or_else(|| anyhow::anyhow!("Could not resolve to any IP address"))?;
+
+    let stream = match tokio::time::timeout(timeout_duration, TcpStream::connect(target_addr)).await {
         Ok(Ok(s)) => s,
-        Ok(Err(e)) => return Err(anyhow::anyhow!("Failed to connect: {}", e)),
-        Err(_) => return Err(anyhow::anyhow!("Connection timed out after {}s", timeout_secs)),
+        Ok(Err(e)) => return Err(anyhow::anyhow!("Failed to connect to {}: {}", target_addr, e)),
+        Err(_) => return Err(anyhow::anyhow!("Connection to {} timed out after {}s", target_addr, timeout_secs)),
     };
 
     if secure {
