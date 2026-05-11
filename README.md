@@ -10,6 +10,7 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 
 - **Asynchronous Full-Duplex I/O:** Simultaneous bidirectional communication using `tokio::select!`.
 - **TLS 1.3 Encryption:** Native support for secure tunnels in both Client and Server modes.
+- **Port Scanning (-z):** High-speed asynchronous port scanning with range support (e.g., 20-100).
 - **Intuitive CLI:** Powered by `clap` for a professional command-line experience.
 - **Custom Banner:** Professional identity with ASCII art branding.
 - **Memory Safety:** Built with Rust's strict safety guarantees, eliminating common C-based vulnerabilities like buffer overflows.
@@ -66,22 +67,28 @@ openssl req -new -x509 -key key.pem -out cert.pem -days 365 \
 ### Basic Chat (Insecure)
 Server:
 ```bash
-$ ncrs -l -p 8080 -v
+ncrs -l -p 8080 -v
 ```
 
 Client:
 ```bash
-$ ncrs 127.0.0.1 8080 -v
+ncrs 127.0.0.1 8080 -v
 ```
 
 ### Secure Tunnel (TLS)
 Server:
 ```bash
-$ ncrs -l -p 8443 -v -s
+ncrs -l -p 8443 -v -s
 ```
+
 Client:
 ```bash
-$ ncrs localhost 8443 -v -s
+ncrs localhost 8443 -v -s
+```
+
+### Port Scan
+```bash
+ncrs localhost 20-100 -z -v
 ```
 
 ---
@@ -100,14 +107,18 @@ ncrs google.com 443 -v -s
 ```text
 ncrs/
 ├── src/
-│   └── main.rs          # Core logic and connection engines
-├── .gitignore           # Ignores target/ and key.pem
-├── Cargo.lock           # Fixed dependency versions
-├── Cargo.toml           # Project metadata and dependencies
-├── cert.pem             # Public certificate (shared with clients)
-├── key.pem              # Private key (SECRET - added to .gitignore)
-├── LICENSE.txt          # GPL 3.0 License terms
-└── README.md            # Project documentation
+│   ├── common/
+│   │   └── mod.rs      # Utility functions (port parsing, etc.)
+│   ├── core/
+│   │   └── mod.rs      # Connection engines and scan logic
+│   └── main.rs         # CLI entry point and orchestration
+├── .gitignore          # Ignores target/ and key.pem
+├── Cargo.lock          # Fixed dependency versions
+├── Cargo.toml          # Project metadata and dependencies
+├── cert.pem            # Public certificate (shared with clients)
+├── key.pem             # Private key (SECRET - kept locally)
+├── LICENSE.txt         # GPL 3.0 License terms
+└── README.md           # Project documentation
 
 ---
 
