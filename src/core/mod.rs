@@ -4,24 +4,37 @@ use std::io::BufReader;
 use std::sync::Arc;
 use tokio::io::{self, AsyncRead, AsyncWrite};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::UdpSocket;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_rustls::rustls::{ClientConfig, RootCertStore, ServerConfig};
 use tokio_rustls::{TlsAcceptor, TlsConnector};
-use tokio::net::UdpSocket;
 
 pub async fn run_client(
     target: String,
     port: u16,
     verbose: bool,
     secure: bool,
+    timeout_secs: u64,
 ) -> anyhow::Result<()> {
     let addr = format!("{}:{}", target, port);
+
     if verbose {
         println!("{} Connecting to {}...", "[*]".yellow(), addr);
     }
 
-    let stream = TcpStream::connect(&addr).await?;
+    let timeout_duration = std::time::Duration::from_secs(timeout_secs);
+
+    let stream = match tokio::time::timeout(timeout_duration, TcpStream::connect(&addr)).await {
+        Ok(Ok(s)) => s,
+        Ok(Err(e)) => return Err(anyhow::anyhow!("Failed to connect: {}", e)),
+        Err(_) => {
+            return Err(anyhow::anyhow!(
+                "Connection timed out after {}s",
+                timeout_secs
+            ));
+        }
+    };
 
     if secure {
         let mut root_cert_store = RootCertStore::empty();
@@ -60,8 +73,10 @@ pub async fn run_server(port: u16, verbose: bool, secure: bool) -> anyhow::Resul
     }
 
     if secure {
-        if verbose { println!("{} Loading certificates and private key...", "[*]".yellow()); }
-        
+        if verbose {
+            println!("{} Loading certificates and private key...", "[*]".yellow());
+        }
+
         let cert_file = File::open("cert.pem")?;
         let mut cert_reader = BufReader::new(cert_file);
         let certs = rustls_pemfile::certs(&mut cert_reader).collect::<Result<Vec<_>, _>>()?;
@@ -76,24 +91,38 @@ pub async fn run_server(port: u16, verbose: bool, secure: bool) -> anyhow::Resul
             .with_single_cert(certs, key)?;
 
         let acceptor = TlsAcceptor::from(Arc::new(config));
-        
-        if verbose { println!("{} Waiting for TLS handshake...", "[*]".yellow()); }
+
+        if verbose {
+            println!("{} Waiting for TLS handshake...", "[*]".yellow());
+        }
         let tls_stream = acceptor.accept(stream).await?;
-        
-        if verbose { println!("{} TLS Handshake successful!", "[+]".green()); }
-        
+
+        if verbose {
+            println!("{} TLS Handshake successful!", "[+]".green());
+        }
+
         handle_duplex(tls_stream).await
     } else {
         handle_duplex(stream).await
     }
 }
 
-pub async fn run_port_scan(target: String, ports: Vec<u16>, timeout_secs: u64, verbose: bool) -> anyhow::Result<()> {
+pub async fn run_port_scan(
+    target: String,
+    ports: Vec<u16>,
+    timeout_secs: u64,
+    verbose: bool,
+) -> anyhow::Result<()> {
     let target = Arc::new(target);
     let mut handles = vec![];
 
     if verbose {
-        println!("{} Scanning {} ports on {}...", "[*]".yellow(), ports.len(), target);
+        println!(
+            "{} Scanning {} ports on {}...",
+            "[*]".yellow(),
+            ports.len(),
+            target
+        );
     }
 
     for port in ports {
@@ -132,7 +161,12 @@ where
     Ok(())
 }
 
-pub async fn run_udp_node(target: Option<String>, port: u16, listen: bool, verbose: bool) -> anyhow::Result<()> {
+pub async fn run_udp_node(
+    target: Option<String>,
+    port: u16,
+    listen: bool,
+    verbose: bool,
+) -> anyhow::Result<()> {
     let addr = if listen {
         format!("0.0.0.0:{}", port)
     } else {
@@ -147,7 +181,11 @@ pub async fn run_udp_node(target: Option<String>, port: u16, listen: bool, verbo
         if listen {
             println!("{} UDP listening on port {}", "[*]".yellow(), port);
         } else {
-            println!("{} UDP socket bound to local port {}", "[*]".yellow(), r_socket.local_addr()?.port());
+            println!(
+                "{} UDP socket bound to local port {}",
+                "[*]".yellow(),
+                r_socket.local_addr()?.port()
+            );
         }
     }
 
@@ -175,7 +213,7 @@ pub async fn run_udp_node(target: Option<String>, port: u16, listen: bool, verbo
             } => res,
             res = async {
                 let mut recv_buf = [0u8; 65535];
-                
+
                 loop {
                     let (n, _) = r_socket.recv_from(&mut recv_buf).await?;
                     io::stdout().write_all(&recv_buf[..n]).await?;
@@ -186,7 +224,7 @@ pub async fn run_udp_node(target: Option<String>, port: u16, listen: bool, verbo
     } else {
         let target_str = target.ok_or_else(|| anyhow::anyhow!("Target required"))?;
         let target_addr = format!("{}:{}", target_str, port);
-        
+
         tokio::select! {
             res = async {
                 let mut stdin = io::stdin();

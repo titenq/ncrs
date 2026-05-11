@@ -75,8 +75,7 @@ async fn main() -> anyhow::Result<()> {
         let port = args.p_port.unwrap_or(4444);
         core::run_server(port, args.verbose, args.secure).await?;
     } else if let (Some(target), Some(&port)) = (args.target, all_ports.first()) {
-        // TCP Client
-        core::run_client(target, port, args.verbose, args.secure).await?;
+        core::run_client(target, port, args.verbose, args.secure, args.timeout).await?;
     } else {
         println!("{} Error: Usage ncrs [target] [port] or ncrs -l -p [port]", "[!]".red());
     }
