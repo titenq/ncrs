@@ -108,10 +108,14 @@ pub async fn run_client(
             );
 
             if crlf {
-                println!("{} CRLF mode active (-C). Example for HTTP:", "[*]".blue());
-                println!("   GET / HTTP/1.1");
-                println!("   Host: {}", target);
-                println!("   (Press Enter twice to send)");
+                println!(
+                    "{} CRLF mode active (-C): line endings typed as LF are sent as CRLF.",
+                    "[*]".blue()
+                );
+                println!(
+                    "{} For HTTP, finish headers with an empty line.",
+                    "[*]".blue()
+                );
             }
         }
 

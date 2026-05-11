@@ -1,185 +1,187 @@
-# ncrs - Netcat Rust Edition 🚀
+# ncrs - Netcat Rust Edition
 
-**ncrs** is a modern, high-performance, and secure implementation of the classic Netcat utility, built from the ground up in **Rust**. This project focuses on network security, leveraging the **Tokio** runtime for asynchronous concurrency and **Rustls** for mandatory/optional end-to-end encryption (TLS).
+**ncrs** is a Rust implementation inspired by Netcat. It currently provides TCP client/server mode, UDP mode, asynchronous full-duplex I/O, basic port scanning, IPv6 support, CRLF line-ending conversion, persistent listen mode, and optional TLS.
+
+The project is not yet a drop-in replacement for OpenBSD `nc`. Some flags have different meanings today, and several OpenBSD `nc` options are still not implemented.
 
 Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail.com](mailto:titenq@gmail.com)
 
----
+## Features
 
-## 🛡️ Key Features
+- TCP client and listen modes.
+- UDP client and listen modes.
+- Full-duplex I/O with Tokio.
+- Port scanning with `-z`, including port ranges such as `20-100`.
+- Connection timeout with `-w`.
+- IPv6 mode with `-6`.
+- CRLF conversion with `-C`.
+- Persistent listen mode with `-k`.
+- Optional TLS mode with `-s` / `--secure`.
 
-- **Asynchronous Full-Duplex I/O:** Simultaneous bidirectional communication using `tokio::select!`.
+## Compatibility Notes
 
-- **TLS 1.3 Encryption:** Native support for secure tunnels in both Client and Server modes.
+`ncrs` is currently compatible with only a subset of OpenBSD `nc`.
 
-- **Intuitive CLI:** Powered by `clap` for a professional command-line experience.
+Implemented flags:
 
-- **Custom Banner:** Professional identity with ASCII art branding.
+```text
+-6 -C -k -l -p -s -u -v -w -z
+```
 
-- **Memory Safety:** Built with Rust's strict safety guarantees, eliminating common C-based vulnerabilities like buffer overflows.
+Important differences from OpenBSD `nc`:
 
-- **Static Binaries:** Easy to distribute without worrying about complex system dependencies.
+- In OpenBSD `nc`, `-s` means local source address. In `ncrs`, `-s` currently enables TLS.
+- In OpenBSD `nc`, `-p` is the local source port for outbound connections. In `ncrs`, `-p` is mainly used as the listen port.
+- `ncrs -k` accepts multiple sequential inbound connections, but it currently handles one active TCP connection at a time.
+- OpenBSD options such as `-4`, `-b`, `-D`, `-d`, `-F`, `-h`, `-I`, `-i`, `-M`, `-m`, `-N`, `-n`, `-O`, `-P`, `-q`, `-r`, `-S`, `-T`, `-t`, `-U`, `-V`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
 
-- **Port Scanning (-z):** High-speed asynchronous port scanning with range support (e.g., 20-100).
+## Requirements
 
-- **UDP Support (-u):** Bidirectional datagram communication for both Client and Server modes.
+- Rust with Edition 2024 support.
+- OpenSSL command-line tools only if you want to generate local certificates for TLS testing.
 
-- **Smart Timeout (-w):** Applies to both DNS resolution and TCP connection establishment.
+## Installation
 
-- **IPv6 Ready (-6):** Full support for modern IPv6 addressing and dual-stack connectivity.
-
-- **Line Ending Control (-C):** Optional CRLF (\r\n) support for compatibility with strict protocols like HTTP and SMTP.
-
-- **Persistent Listen (-k):** Keeps the server socket open and accepting new connections after a client disconnects.
-
----
-
-## 🛠️ Tech Stack
-
-*   **Rust:** Core language for performance and memory safety.
-
-*   **Tokio:** The industry-standard asynchronous runtime for Rust.
-
-*   **Rustls:** A modern, fast, and safe TLS library (no OpenSSL dependency for the binary).
-
-*   **Clap:** Powerful command-line argument parsing.
-
-*   **Colored:** Terminal-based visual feedback with colors.
-
-## 📋 Requirements
-
-- Rust 1.70+
-- OpenSSL (only for generating local certificates/keys)
-
-## 🚀 Installation
-
-### 1. Clone and Compile
 ```bash
 git clone https://github.com/titenq/ncrs.git
 cd ncrs
 cargo build --release
 ```
 
-### 2. Global Installation
-To use ncrs from anywhere in your terminal:
+To install globally:
+
 ```bash
 sudo cp target/release/ncrs /usr/local/bin/
 ```
 
----
+## Usage
 
-## 🔐 TLS Setup (Self-Signed)
+### TCP
 
-To use Secure Mode (-s), you must generate local certificates on your Linux system:
+Server:
 
 ```bash
-openssl req -new -x509 -key key.pem -out cert.pem -days 365 \
+ncrs -l -p 8080 -v
+```
+
+Client:
+
+```bash
+ncrs 127.0.0.1 8080 -v
+```
+
+### Persistent Listen Mode
+
+```bash
+ncrs -l -p 8080 -k -v
+```
+
+Then connect more than once from another terminal:
+
+```bash
+ncrs 127.0.0.1 8080 -v
+```
+
+### UDP
+
+Server:
+
+```bash
+ncrs -l -p 8080 -u -v
+```
+
+Client:
+
+```bash
+ncrs 127.0.0.1 8080 -u -v
+```
+
+### Port Scan
+
+```bash
+ncrs localhost 20-100 -z -v
+```
+
+### Timeout
+
+```bash
+ncrs 8.8.8.8 80 -w 10
+```
+
+### IPv6
+
+```bash
+ncrs ::1 8080 -6 -v
+```
+
+### HTTP With CRLF
+
+```bash
+ncrs google.com 80 -v -C
+```
+
+After connecting, type:
+
+```text
+GET / HTTP/1.1
+Host: google.com
+Connection: close
+
+```
+
+The empty line finishes the HTTP headers.
+
+## TLS Mode
+
+TLS is enabled with `-s` / `--secure` in the current CLI.
+
+Generate a local certificate and key for server-side testing:
+
+```bash
+openssl req -new -x509 -newkey rsa:2048 -nodes \
+    -keyout key.pem \
+    -out cert.pem \
+    -days 365 \
     -subj "/CN=localhost" \
     -addext "subjectAltName = DNS:localhost,IP:127.0.0.1" \
     -addext "basicConstraints = CA:FALSE" \
     -addext "keyUsage = digitalSignature, keyEncipherment"
 ```
 
-*Note: Make sure to add key.pem to your .gitignore file to prevent leaking your private key.*
-
-## 📖 Usage Guide
-
-### Basic Chat (TCP & UDP)
-**TCP Server:**
-```bash
-ncrs -l -p 8080 -v
-```
-
-**UDP Server:**
-```bash
-ncrs -l -p 8080 -u -v
-```
-
-**UDP Client:**
-```bash
-ncrs localhost 8080 -u -v
-```
-
-### Secure Tunnel (TLS)
 Server:
+
 ```bash
 ncrs -l -p 8443 -v -s
 ```
 
 Client:
+
 ```bash
 ncrs localhost 8443 -v -s
 ```
 
-### Port Scan
-```bash
-ncrs localhost 20-100 -z -v
-```
+Do not commit `key.pem`.
 
-**Connection with Timeout:**
-```bash
-ncrs 8.8.8.8 80 -w 10
-```
-
-**IPv6 Connection:**
-```bash
-ncrs ::1 8080 -v
-```
-
-**Testing HTTP (Requires -C):**
-```bash
-ncrs google.com 80 -v -C
-# Once connected, type:
-GET / HTTP/1.1
-Host: google.com
-(Press Enter twice)
-```
-
-**Persistent Server:**
-```bash
-ncrs -l -p 8080 -k -v
-```
-
----
-
-### Network Auditing (Example: Google)
-You can use ncrs to audit real-world server certificates and HTTP headers:
-
-```bash
-ncrs google.com 443 -v -s
-```
-
-*Once connected, type GET / HTTP/1.1 and hit Enter twice.*
-
-## 📂 Project Structure
+## Project Structure
 
 ```text
 ncrs/
 ├── src/
 │   ├── common/
-│   │   └── mod.rs      # Utility functions (port parsing, etc.)
+│   │   └── mod.rs
 │   ├── core/
-│   │   └── mod.rs      # Connection engines and scan logic
-│   └── main.rs         # CLI entry point and orchestration
-├── .gitignore          # Ignores target/ and key.pem
-├── Cargo.lock          # Fixed dependency versions
-├── Cargo.toml          # Project metadata and dependencies
-├── cert.pem            # Public certificate (shared with clients)
-├── key.pem             # Private key (SECRET - kept locally)
-├── LICENSE.txt         # GPL 3.0 License terms
-└── README.md           # Project documentation
+│   │   └── mod.rs
+│   └── main.rs
+├── Cargo.lock
+├── Cargo.toml
+├── LICENSE.txt
+└── README.md
 ```
 
----
+## Disclaimer
 
-## ⚖️ Disclaimer
+This project is intended for educational and cybersecurity research purposes only. Users are responsible for complying with applicable laws and regulations.
 
-This project is intended for **educational and cybersecurity research purposes only**. The author is not responsible for any misuse, damage, or illegal activities performed with this tool. Users are responsible for complying with local laws and regulations.
+## License
 
----
-
-## 📜 License
-
-This project is licensed under the GPL3.0 License - see the [LICENSE](LICENSE.txt) file for details.
-
----
+This project is licensed under the GPL 3.0 License. See [LICENSE.txt](LICENSE.txt).
