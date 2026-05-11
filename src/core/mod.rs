@@ -3,10 +3,12 @@ use std::fs::File;
 use std::io::BufReader;
 use std::sync::Arc;
 use tokio::io::{self, AsyncRead, AsyncWrite};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_rustls::rustls::{ClientConfig, RootCertStore, ServerConfig};
 use tokio_rustls::{TlsAcceptor, TlsConnector};
+use tokio::net::UdpSocket;
 
 pub async fn run_client(
     target: String,
@@ -128,4 +130,82 @@ where
         res = t2 => { res??; },
     }
     Ok(())
+}
+
+pub async fn run_udp_node(target: Option<String>, port: u16, listen: bool, verbose: bool) -> anyhow::Result<()> {
+    let addr = if listen {
+        format!("0.0.0.0:{}", port)
+    } else {
+        "0.0.0.0:0".to_string()
+    };
+
+    let socket = UdpSocket::bind(&addr).await?;
+    let r_socket = Arc::new(socket);
+    let s_socket = Arc::clone(&r_socket);
+
+    if verbose {
+        if listen {
+            println!("{} UDP listening on port {}", "[*]".yellow(), port);
+        } else {
+            println!("{} UDP socket bound to local port {}", "[*]".yellow(), r_socket.local_addr()?.port());
+        }
+    }
+
+    if listen {
+        let mut buf = [0u8; 65535];
+        let (len, peer) = r_socket.recv_from(&mut buf).await?;
+
+        io::stdout().write_all(&buf[..len]).await?;
+        io::stdout().flush().await?;
+
+        if verbose {
+            println!("\n{} UDP packet received from {}", "[+]".green(), peer);
+        }
+
+        tokio::select! {
+            res = async {
+                let mut stdin = io::stdin();
+                let mut input_buf = [0u8; 65535];
+                loop {
+                    let n = stdin.read(&mut input_buf).await?;
+                    if n == 0 { break; }
+                    s_socket.send_to(&input_buf[..n], peer).await?;
+                }
+                anyhow::Ok(())
+            } => res,
+            res = async {
+                let mut recv_buf = [0u8; 65535];
+                
+                loop {
+                    let (n, _) = r_socket.recv_from(&mut recv_buf).await?;
+                    io::stdout().write_all(&recv_buf[..n]).await?;
+                    io::stdout().flush().await?;
+                }
+            } => res,
+        }
+    } else {
+        let target_str = target.ok_or_else(|| anyhow::anyhow!("Target required"))?;
+        let target_addr = format!("{}:{}", target_str, port);
+        
+        tokio::select! {
+            res = async {
+                let mut stdin = io::stdin();
+                let mut input_buf = [0u8; 65535];
+                loop {
+                    let n = stdin.read(&mut input_buf).await?;
+                    if n == 0 { break; }
+                    s_socket.send_to(&input_buf[..n], &target_addr).await?;
+                }
+                anyhow::Ok(())
+            } => res,
+            res = async {
+                let mut recv_buf = [0u8; 65535];
+                loop {
+                    let (n, _) = r_socket.recv_from(&mut recv_buf).await?;
+                    io::stdout().write_all(&recv_buf[..n]).await?;
+                    io::stdout().flush().await?;
+                }
+            } => res,
+        }
+    }
 }

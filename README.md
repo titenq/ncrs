@@ -11,6 +11,7 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 - **Asynchronous Full-Duplex I/O:** Simultaneous bidirectional communication using `tokio::select!`.
 - **TLS 1.3 Encryption:** Native support for secure tunnels in both Client and Server modes.
 - **Port Scanning (-z):** High-speed asynchronous port scanning with range support (e.g., 20-100).
+- **UDP Support (-u):** Bidirectional datagram communication for both Client and Server modes.
 - **Intuitive CLI:** Powered by `clap` for a professional command-line experience.
 - **Custom Banner:** Professional identity with ASCII art branding.
 - **Memory Safety:** Built with Rust's strict safety guarantees, eliminating common C-based vulnerabilities like buffer overflows.
@@ -64,15 +65,20 @@ openssl req -new -x509 -key key.pem -out cert.pem -days 365 \
 
 ## 📖 Usage Guide
 
-### Basic Chat (Insecure)
-Server:
+### Basic Chat (TCP & UDP)
+**TCP Server:**
 ```bash
 ncrs -l -p 8080 -v
 ```
 
-Client:
+**UDP Server:**
 ```bash
-ncrs 127.0.0.1 8080 -v
+ncrs -l -p 8080 -u -v
+```
+
+**UDP Client:**
+```bash
+ncrs localhost 8080 -u -v
 ```
 
 ### Secure Tunnel (TLS)
