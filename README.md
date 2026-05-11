@@ -119,6 +119,7 @@ ncrs/
 ├── key.pem             # Private key (SECRET - kept locally)
 ├── LICENSE.txt         # GPL 3.0 License terms
 └── README.md           # Project documentation
+```
 
 ---
 
