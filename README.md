@@ -12,6 +12,14 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 
 - **TLS 1.3 Encryption:** Native support for secure tunnels in both Client and Server modes.
 
+- **Intuitive CLI:** Powered by `clap` for a professional command-line experience.
+
+- **Custom Banner:** Professional identity with ASCII art branding.
+
+- **Memory Safety:** Built with Rust's strict safety guarantees, eliminating common C-based vulnerabilities like buffer overflows.
+
+- **Static Binaries:** Easy to distribute without worrying about complex system dependencies.
+
 - **Port Scanning (-z):** High-speed asynchronous port scanning with range support (e.g., 20-100).
 
 - **UDP Support (-u):** Bidirectional datagram communication for both Client and Server modes.
@@ -22,13 +30,7 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 
 - **Line Ending Control (-C):** Optional CRLF (\r\n) support for compatibility with strict protocols like HTTP and SMTP.
 
-- **Intuitive CLI:** Powered by `clap` for a professional command-line experience.
-
-- **Custom Banner:** Professional identity with ASCII art branding.
-
-- **Memory Safety:** Built with Rust's strict safety guarantees, eliminating common C-based vulnerabilities like buffer overflows.
-
-- **Static Binaries:** Easy to distribute without worrying about complex system dependencies.
+- **Persistent Listen (-k):** Keeps the server socket open and accepting new connections after a client disconnects.
 
 ---
 
@@ -132,6 +134,12 @@ GET / HTTP/1.1
 Host: google.com
 (Press Enter twice)
 ```
+
+**Persistent Server:**
+```bash
+ncrs -l -p 8080 -k -v
+```
+
 ---
 
 ### Network Auditing (Example: Google)

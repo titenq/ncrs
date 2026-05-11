@@ -52,6 +52,14 @@ pub async fn run_client(
         .next()
         .ok_or_else(|| anyhow::anyhow!("Could not resolve to any IP address"))?;
 
+    if verbose {
+        println!("{} Resolved to: {}", "[*]".yellow(), target_addr);
+    }
+
+    if verbose {
+        println!("{} Connecting...", "[*]".yellow());
+    }
+
     let stream = match tokio::time::timeout(timeout_duration, TcpStream::connect(target_addr)).await
     {
         Ok(Ok(s)) => s,
@@ -74,12 +82,14 @@ pub async fn run_client(
     if secure {
         let mut root_cert_store = RootCertStore::empty();
         let cert_result = rustls_native_certs::load_native_certs();
+
         root_cert_store.add_parsable_certificates(cert_result.certs);
 
         if std::path::Path::new("cert.pem").exists() {
             let cert_file = File::open("cert.pem")?;
             let mut reader = BufReader::new(cert_file);
             let certs = rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?;
+
             root_cert_store.add_parsable_certificates(certs);
         }
 
@@ -96,14 +106,35 @@ pub async fn run_client(
                 "{} Connected! Type your messages and press Enter.",
                 "[+]".green()
             );
-            
+
             if crlf {
-                println!("{} CRLF mode active (\\n is sent as \\r\\n)", "[*]".blue());
+                println!("{} CRLF mode active (-C). Example for HTTP:", "[*]".blue());
+                println!("   GET / HTTP/1.1");
+                println!("   Host: {}", target);
+                println!("   (Press Enter twice to send)");
             }
         }
 
         handle_duplex(tls_stream, crlf).await
     } else {
+        if verbose {
+            println!(
+                "{} Connected! Type your messages and press Enter.",
+                "[+]".green()
+            );
+
+            if crlf {
+                println!(
+                    "{} CRLF mode active (-C): line endings typed as LF are sent as CRLF.",
+                    "[*]".blue()
+                );
+                println!(
+                    "{} For HTTP, finish headers with an empty line.",
+                    "[*]".blue()
+                );
+            }
+        }
+
         handle_duplex(stream, crlf).await
     }
 }
@@ -222,12 +253,14 @@ where
 
             if crlf {
                 let mut data = Vec::with_capacity(n * 2);
+                let mut previous_was_cr = false;
 
                 for &byte in &buf[..n] {
-                    if byte == b'\n' {
+                    if byte == b'\n' && !previous_was_cr {
                         data.push(b'\r');
                     }
                     data.push(byte);
+                    previous_was_cr = byte == b'\r';
                 }
 
                 writer.write_all(&data).await?;
@@ -238,6 +271,7 @@ where
             writer.flush().await?;
         }
 
+        writer.shutdown().await?;
         anyhow::Ok(())
     });
 
@@ -246,9 +280,18 @@ where
         io::copy(&mut reader, &mut stdout).await
     });
 
+    tokio::pin!(stdin_to_socket);
+    tokio::pin!(socket_to_stdout);
+
     tokio::select! {
-        res = stdin_to_socket => { res??; },
-        res = socket_to_stdout => { res??; },
+        res = &mut socket_to_stdout => {
+            res??;
+            stdin_to_socket.abort();
+        },
+        res = &mut stdin_to_socket => {
+            res??;
+            socket_to_stdout.await??;
+        },
     }
 
     Ok(())

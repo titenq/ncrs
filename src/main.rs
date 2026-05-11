@@ -49,38 +49,59 @@ struct Args {
     /// [Flag: -C] Send CRLF as line-ending instead of just LF
     #[arg(short = 'C', long)]
     crlf: bool,
+
+    /// [Flag: -k] Keep-alive: accept multiple connections in listen mode
+    #[arg(short = 'k', long)]
+    keep_alive: bool,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    // Banner
     if let Some(figure) = FIGfont::standard().unwrap().convert("ncrs") {
         println!("{}", figure.to_string().cyan().bold());
     }
 
-    // Port Parsing
     let mut all_ports = vec![];
+
     for p_arg in &args.ports {
         all_ports.extend(common::parse_port_range(p_arg));
     }
 
-    // Logic Execution
-    // Logic Execution
     if args.scan {
         if let Some(target) = args.target {
             core::run_port_scan(target, all_ports, args.timeout, args.verbose).await?;
         }
     } else if args.udp {
-        // UDP
         let port = args
             .p_port
             .unwrap_or_else(|| all_ports.first().copied().unwrap_or(4444));
         core::run_udp_node(args.target, port, args.listen, args.verbose).await?;
     } else if args.listen {
         let port = args.p_port.unwrap_or(4444);
-        core::run_server(port, args.verbose, args.secure, args.ipv6, args.crlf).await?;
+
+        if args.keep_alive {
+            if args.verbose {
+                println!(
+                    "{} Persistent mode active (-k). Server will restart after logout.",
+                    "[*]".blue()
+                );
+            }
+            loop {
+                if let Err(e) =
+                    core::run_server(port, args.verbose, args.secure, args.ipv6, args.crlf).await
+                {
+                    if args.verbose {
+                        eprintln!("{} Connection closed or error: {}", "[!]".red(), e);
+                    }
+                }
+
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            }
+        } else {
+            core::run_server(port, args.verbose, args.secure, args.ipv6, args.crlf).await?;
+        }
     } else if let (Some(target), Some(&port)) = (args.target, all_ports.first()) {
         core::run_client(
             target,
