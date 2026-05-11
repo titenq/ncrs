@@ -6,7 +6,7 @@ use colored::*;
 use figlet_rs::FIGfont;
 
 #[derive(Parser, Debug)]
-#[command(name = "ncrs", author = "TitenQ", version = "1.0.0")]
+#[command(name = "ncrs", author = "TitenQ", version = "0.1.0")]
 struct Args {
     /// Target IP address or Hostname
     target: Option<String>,
@@ -41,6 +41,10 @@ struct Args {
     /// [Flag: -u] UDP mode: uses UDP instead of the default TCP
     #[arg(short = 'u', long)]
     udp: bool,
+
+    /// [Flag: -6] IPv6 mode: force usage of IPv6 addresses
+    #[arg(short = '6', long)]
+    ipv6: bool,
 }
 
 #[tokio::main]
@@ -66,18 +70,29 @@ async fn main() -> anyhow::Result<()> {
         }
     } else if args.udp {
         // UDP
-        let port = args.p_port.unwrap_or_else(|| {
-            all_ports.first().copied().unwrap_or(4444)
-        });
+        let port = args
+            .p_port
+            .unwrap_or_else(|| all_ports.first().copied().unwrap_or(4444));
         core::run_udp_node(args.target, port, args.listen, args.verbose).await?;
     } else if args.listen {
         // Listen
         let port = args.p_port.unwrap_or(4444);
-        core::run_server(port, args.verbose, args.secure).await?;
+        core::run_server(port, args.verbose, args.secure, args.ipv6).await?;
     } else if let (Some(target), Some(&port)) = (args.target, all_ports.first()) {
-        core::run_client(target, port, args.verbose, args.secure, args.timeout).await?;
+        core::run_client(
+            target,
+            port,
+            args.verbose,
+            args.secure,
+            args.timeout,
+            args.ipv6,
+        )
+        .await?;
     } else {
-        println!("{} Error: Usage ncrs [target] [port] or ncrs -l -p [port]", "[!]".red());
+        println!(
+            "{} Error: Usage ncrs [target] [port] or ncrs -l -p [port]",
+            "[!]".red()
+        );
     }
 
     Ok(())

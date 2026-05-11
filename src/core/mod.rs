@@ -16,24 +16,25 @@ pub async fn run_client(
     verbose: bool,
     secure: bool,
     timeout_secs: u64,
+    ipv6: bool,
 ) -> anyhow::Result<()> {
-    let addr = format!("{}:{}", target, port);
+    let addr = if ipv6 && !target.contains('[') && target.contains(':') {
+        format!("[{}]:{}", target, port)
+    } else {
+        format!("{}:{}", target, port)
+    };
 
     if verbose {
-        println!("{} Connecting to {}...", "[*]".yellow(), addr);
+        let proto = if ipv6 { "IPv6" } else { "IPv4/DNS" };
+        println!("{} [{}] Connecting to {}...", "[*]".yellow(), proto, addr);
     }
 
     let timeout_duration = std::time::Duration::from_secs(timeout_secs);
-
+    
     let stream = match tokio::time::timeout(timeout_duration, TcpStream::connect(&addr)).await {
         Ok(Ok(s)) => s,
         Ok(Err(e)) => return Err(anyhow::anyhow!("Failed to connect: {}", e)),
-        Err(_) => {
-            return Err(anyhow::anyhow!(
-                "Connection timed out after {}s",
-                timeout_secs
-            ));
-        }
+        Err(_) => return Err(anyhow::anyhow!("Connection timed out after {}s", timeout_secs)),
     };
 
     if secure {
@@ -62,8 +63,13 @@ pub async fn run_client(
     }
 }
 
-pub async fn run_server(port: u16, verbose: bool, secure: bool) -> anyhow::Result<()> {
-    let addr = format!("0.0.0.0:{}", port);
+pub async fn run_server(port: u16, verbose: bool, secure: bool, ipv6: bool) -> anyhow::Result<()> {
+    let addr = if ipv6 {
+        format!("[::]:{}", port)
+    } else {
+        format!("0.0.0.0:{}", port)
+    };
+
     let listener = TcpListener::bind(&addr).await?;
     println!("{} Listening on {}...", "[*]".yellow(), addr);
 

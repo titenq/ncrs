@@ -13,6 +13,7 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 - **Port Scanning (-z):** High-speed asynchronous port scanning with range support (e.g., 20-100).
 - **UDP Support (-u):** Bidirectional datagram communication for both Client and Server modes.
 - **Configurable Timeout (-w):** Custom connection timeout for network auditing and scanning.
+- **IPv6 Ready (-6):** Full support for modern IPv6 addressing and dual-stack connectivity.
 - **Intuitive CLI:** Powered by `clap` for a professional command-line experience.
 - **Custom Banner:** Professional identity with ASCII art branding.
 - **Memory Safety:** Built with Rust's strict safety guarantees, eliminating common C-based vulnerabilities like buffer overflows.
@@ -101,6 +102,11 @@ ncrs localhost 20-100 -z -v
 **Connection with Timeout:**
 ```bash
 ncrs 8.8.8.8 80 -w 10
+```
+
+**IPv6 Connection:**
+```bash
+ncrs ::1 8080 -v
 ```
 
 ---
