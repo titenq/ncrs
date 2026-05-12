@@ -17,7 +17,8 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 - IPv6 mode with `-6`.
 - CRLF conversion with `-C`.
 - Persistent listen mode with `-k`.
-- Optional TLS mode with `-s` / `--secure`.
+- Local source address selection with `-s`.
+- Optional TLS mode with `--tls`.
 
 ## Compatibility Notes
 
@@ -31,8 +32,8 @@ Implemented flags:
 
 Important differences from OpenBSD `nc`:
 
-- In OpenBSD `nc`, `-s` means local source address. In `ncrs`, `-s` currently enables TLS.
-- In OpenBSD `nc`, `-p` is the local source port for outbound connections. In `ncrs`, `-p` is mainly used as the listen port.
+- `--tls` is an `ncrs` extension and is not an OpenBSD `nc` flag.
+- In OpenBSD `nc`, `-p` is the local source port for outbound connections. In `ncrs`, `-p` still also acts as the listen port when `-l` is used.
 - `ncrs -k` accepts multiple sequential inbound connections, but it currently handles one active TCP connection at a time.
 - OpenBSD options such as `-b`, `-D`, `-d`, `-F`, `-h`, `-I`, `-i`, `-M`, `-m`, `-N`, `-n`, `-O`, `-P`, `-q`, `-r`, `-S`, `-T`, `-t`, `-U`, `-V`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
 
@@ -109,6 +110,22 @@ ncrs localhost 20-100 -z -v
 ncrs 8.8.8.8 80 -w 10
 ```
 
+### Source Address
+
+Terminal 1:
+
+```bash
+ncrs -l -p 8080 -4 -v
+```
+
+Terminal 2:
+
+```bash
+ncrs 127.0.0.1 8080 -s 127.0.0.1 -4 -v
+```
+
+Use `-s` to choose the local address used for outbound connections. This is useful on hosts with multiple local IP addresses or when testing routing and firewall rules.
+
 ### IPv4
 
 ```bash
@@ -140,7 +157,7 @@ The empty line finishes the HTTP headers.
 
 ## TLS Mode
 
-TLS is enabled with `-s` / `--secure` in the current CLI.
+TLS is enabled with `--tls`.
 
 Generate a local certificate and key for server-side testing:
 
@@ -158,13 +175,13 @@ openssl req -new -x509 -newkey rsa:2048 -nodes \
 Server:
 
 ```bash
-ncrs -l -p 8443 -v -s
+ncrs -l -p 8443 -v --tls
 ```
 
 Client:
 
 ```bash
-ncrs localhost 8443 -v -s
+ncrs localhost 8443 -v --tls
 ```
 
 Do not commit `key.pem`.

@@ -26,13 +26,17 @@ struct Args {
     #[arg(short = 'z', long)]
     scan: bool,
 
-    /// [Flag: -p] Source port: specific port to bind to in listen mode
+    /// [Flag: -p] Local source port for outbound connections; listen port with -l
     #[arg(short = 'p', long)]
     p_port: Option<u16>,
 
-    /// [Flag: -s] Secure mode: uses TLS for the connection
-    #[arg(short = 's', long = "secure")]
-    secure: bool,
+    /// [Flag: -s] Local source address for outbound connections
+    #[arg(short = 's', long = "sourceaddr", value_name = "SOURCEADDR")]
+    source_addr: Option<String>,
+
+    /// [ncrs extension] Use TLS for the connection
+    #[arg(long = "tls")]
+    tls: bool,
 
     /// [Flag: -w] Connection timeout: maximum seconds to wait for a response
     #[arg(short = 'w', long, default_value = "5")]
@@ -83,7 +87,16 @@ async fn main() -> anyhow::Result<()> {
 
     if args.scan {
         if let Some(target) = args.target {
-            core::run_port_scan(target, all_ports, args.timeout, args.verbose, family).await?;
+            core::run_port_scan(
+                target,
+                all_ports,
+                args.timeout,
+                args.verbose,
+                family,
+                args.source_addr,
+                args.p_port,
+            )
+            .await?;
         }
     } else if args.udp {
         let port = args
@@ -102,7 +115,7 @@ async fn main() -> anyhow::Result<()> {
             }
             loop {
                 if let Err(e) =
-                    core::run_server(port, args.verbose, args.secure, family, args.crlf).await
+                    core::run_server(port, args.verbose, args.tls, family, args.crlf).await
                 {
                     if args.verbose {
                         eprintln!("{} Connection closed or error: {}", "[!]".red(), e);
@@ -112,17 +125,19 @@ async fn main() -> anyhow::Result<()> {
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             }
         } else {
-            core::run_server(port, args.verbose, args.secure, family, args.crlf).await?;
+            core::run_server(port, args.verbose, args.tls, family, args.crlf).await?;
         }
     } else if let (Some(target), Some(&port)) = (args.target, all_ports.first()) {
         core::run_client(
             target,
             port,
             args.verbose,
-            args.secure,
+            args.tls,
             args.timeout,
             family,
             args.crlf,
+            args.source_addr,
+            args.p_port,
         )
         .await?;
     } else {

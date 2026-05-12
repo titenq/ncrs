@@ -1,11 +1,12 @@
 use colored::*;
 use std::fs::File;
 use std::io::BufReader;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use tokio::io::{self, AsyncRead, AsyncWrite};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UdpSocket;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::{TcpListener, TcpSocket, TcpStream};
 use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_rustls::rustls::{ClientConfig, RootCertStore, ServerConfig};
 use tokio_rustls::{TlsAcceptor, TlsConnector};
@@ -64,14 +65,74 @@ async fn resolve_address(
         .ok_or_else(|| anyhow::anyhow!("Could not resolve to any {} address", family.label()))
 }
 
+async fn connect_tcp(
+    target_addr: SocketAddr,
+    source_addr: Option<&str>,
+    source_port: Option<u16>,
+    timeout_duration: std::time::Duration,
+) -> anyhow::Result<TcpStream> {
+    if source_addr.is_none() && source_port.is_none() {
+        return match tokio::time::timeout(timeout_duration, TcpStream::connect(target_addr)).await {
+            Ok(Ok(s)) => Ok(s),
+            Ok(Err(e)) => Err(anyhow::anyhow!(
+                "Failed to connect to {}: {}",
+                target_addr,
+                e
+            )),
+            Err(_) => Err(anyhow::anyhow!(
+                "Connection to {} timed out after {}s",
+                target_addr,
+                timeout_duration.as_secs()
+            )),
+        };
+    }
+
+    let local_ip = match source_addr {
+        Some(addr) => addr.parse::<IpAddr>()?,
+        None if target_addr.is_ipv4() => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+        None => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
+    };
+
+    if target_addr.is_ipv4() != local_ip.is_ipv4() {
+        return Err(anyhow::anyhow!(
+            "Source address family does not match target address family"
+        ));
+    }
+
+    let socket = if target_addr.is_ipv4() {
+        TcpSocket::new_v4()?
+    } else {
+        TcpSocket::new_v6()?
+    };
+    let local_addr = SocketAddr::new(local_ip, source_port.unwrap_or(0));
+    socket.bind(local_addr)?;
+
+    match tokio::time::timeout(timeout_duration, socket.connect(target_addr)).await {
+        Ok(Ok(s)) => Ok(s),
+        Ok(Err(e)) => Err(anyhow::anyhow!(
+            "Failed to connect to {} from {}: {}",
+            target_addr,
+            local_addr,
+            e
+        )),
+        Err(_) => Err(anyhow::anyhow!(
+            "Connection to {} timed out after {}s",
+            target_addr,
+            timeout_duration.as_secs()
+        )),
+    }
+}
+
 pub async fn run_client(
     target: String,
     port: u16,
     verbose: bool,
-    secure: bool,
+    tls: bool,
     timeout_secs: u64,
     family: AddressFamily,
     crlf: bool,
+    source_addr: Option<String>,
+    source_port: Option<u16>,
 ) -> anyhow::Result<()> {
     let addr = format_endpoint(&target, port);
 
@@ -100,26 +161,15 @@ pub async fn run_client(
         println!("{} Connecting...", "[*]".yellow());
     }
 
-    let stream = match tokio::time::timeout(timeout_duration, TcpStream::connect(target_addr)).await
-    {
-        Ok(Ok(s)) => s,
-        Ok(Err(e)) => {
-            return Err(anyhow::anyhow!(
-                "Failed to connect to {}: {}",
-                target_addr,
-                e
-            ));
-        }
-        Err(_) => {
-            return Err(anyhow::anyhow!(
-                "Connection to {} timed out after {}s",
-                target_addr,
-                timeout_secs
-            ));
-        }
-    };
+    let stream = connect_tcp(
+        target_addr,
+        source_addr.as_deref(),
+        source_port,
+        timeout_duration,
+    )
+    .await?;
 
-    if secure {
+    if tls {
         let mut root_cert_store = RootCertStore::empty();
         let cert_result = rustls_native_certs::load_native_certs();
 
@@ -186,7 +236,7 @@ pub async fn run_client(
 pub async fn run_server(
     port: u16,
     verbose: bool,
-    secure: bool,
+    tls: bool,
     family: AddressFamily,
     crlf: bool,
 ) -> anyhow::Result<()> {
@@ -203,7 +253,7 @@ pub async fn run_server(
         println!("{} Connection from {}", "[+]".green(), remote_addr);
     }
 
-    if secure {
+    if tls {
         if verbose {
             println!("{} Loading certificates and private key...", "[*]".yellow());
         }
@@ -244,6 +294,8 @@ pub async fn run_port_scan(
     timeout_secs: u64,
     verbose: bool,
     family: AddressFamily,
+    source_addr: Option<String>,
+    source_port: Option<u16>,
 ) -> anyhow::Result<()> {
     let target = Arc::new(target);
     let mut handles = vec![];
@@ -259,10 +311,14 @@ pub async fn run_port_scan(
 
     for port in ports {
         let t = Arc::clone(&target);
+        let source_addr = source_addr.clone();
         handles.push(tokio::spawn(async move {
             let timeout = std::time::Duration::from_secs(timeout_secs);
             if let Ok(addr) = resolve_address(&t, port, family, timeout).await {
-                if let Ok(Ok(_)) = tokio::time::timeout(timeout, TcpStream::connect(addr)).await {
+                if connect_tcp(addr, source_addr.as_deref(), source_port, timeout)
+                    .await
+                    .is_ok()
+                {
                     println!("{} port {} open", "Connection to".green(), port);
                 }
             }
