@@ -44,6 +44,7 @@ async fn main() -> anyhow::Result<()> {
                 family,
                 args.source_addr,
                 args.source_port,
+                args.numeric,
             )
             .await?;
         }
@@ -68,6 +69,7 @@ async fn main() -> anyhow::Result<()> {
             family,
             args.source_addr,
             args.source_port,
+            args.numeric,
         )
         .await?;
     } else if args.listen {
@@ -102,6 +104,7 @@ async fn main() -> anyhow::Result<()> {
             args.crlf,
             args.source_addr,
             args.source_port,
+            args.numeric,
         )
         .await?;
     } else {

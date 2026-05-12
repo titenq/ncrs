@@ -1,4 +1,4 @@
-use crate::core::address::{AddressFamily, format_endpoint};
+use crate::core::address::{AddressFamily, format_endpoint, parse_numeric_address};
 use colored::*;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
@@ -13,6 +13,7 @@ pub async fn run_udp_node(
     family: AddressFamily,
     source_addr: Option<String>,
     source_port: Option<u16>,
+    numeric: bool,
 ) -> anyhow::Result<()> {
     let addr = udp_bind_addr(listen, port, family, source_addr.as_deref(), source_port)?;
 
@@ -66,7 +67,11 @@ pub async fn run_udp_node(
         }
     } else {
         let target_str = target.ok_or_else(|| anyhow::anyhow!("Target required"))?;
-        let target_addr = format_endpoint(&target_str, port);
+        let target_addr = if numeric {
+            parse_numeric_address(&target_str, port, family)?.to_string()
+        } else {
+            format_endpoint(&target_str, port)
+        };
 
         tokio::select! {
             res = async {

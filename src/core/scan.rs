@@ -1,4 +1,4 @@
-use crate::core::address::{AddressFamily, resolve_address};
+use crate::core::address::{AddressFamily, parse_numeric_address, resolve_address};
 use crate::core::tcp::connect_tcp;
 use colored::*;
 use std::sync::Arc;
@@ -11,7 +11,13 @@ pub async fn run_port_scan(
     family: AddressFamily,
     source_addr: Option<String>,
     source_port: Option<u16>,
+    numeric: bool,
 ) -> anyhow::Result<()> {
+    if numeric {
+        let port = ports.first().copied().unwrap_or(0);
+        parse_numeric_address(&target, port, family)?;
+    }
+
     let target = Arc::new(target);
     let mut handles = vec![];
 
@@ -29,7 +35,7 @@ pub async fn run_port_scan(
         let source_addr = source_addr.clone();
         handles.push(tokio::spawn(async move {
             let timeout = std::time::Duration::from_secs(timeout_secs);
-            if let Ok(addr) = resolve_address(&t, port, family, timeout).await {
+            if let Ok(addr) = resolve_address(&t, port, family, timeout, numeric).await {
                 if connect_tcp(addr, source_addr.as_deref(), source_port, timeout)
                     .await
                     .is_ok()

@@ -17,6 +17,7 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 - IPv6 mode with `-6`.
 - CRLF conversion with `-C`.
 - Persistent listen mode with `-k`.
+- Numeric-only mode with `-n`.
 - Local source address selection with `-s`.
 - Local source port selection with `-p`.
 - Optional TLS mode with `--tls`.
@@ -41,6 +42,7 @@ Options:
       --tls                      ncrs extension: use TLS for the connection
   -w, --timeout <TIMEOUT>        Connection timeout in seconds
   -u, --udp                      UDP mode
+  -n, --numeric                  Suppress name resolution
   -4, --ipv4                     Force IPv4
   -6, --ipv6                     Force IPv6
   -C, --crlf                     Send CRLF as line-ending
@@ -50,7 +52,7 @@ Options:
 Important differences from OpenBSD `nc`:
 
 - `--tls` is an `ncrs` extension and is not an OpenBSD `nc` flag.
-- OpenBSD options such as `-b`, `-D`, `-d`, `-F`, `-h`, `-I`, `-i`, `-M`, `-m`, `-N`, `-n`, `-O`, `-P`, `-q`, `-r`, `-S`, `-T`, `-t`, `-U`, `-V`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
+- OpenBSD options such as `-b`, `-D`, `-d`, `-F`, `-h`, `-I`, `-i`, `-M`, `-m`, `-N`, `-O`, `-P`, `-q`, `-r`, `-S`, `-T`, `-t`, `-U`, `-V`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
 
 ## Requirements
 
@@ -136,6 +138,20 @@ ncrs 8.8.8.8 80 -w 10
 ```
 
 Use `-w` to limit DNS resolution and TCP connection wait time.
+
+### Numeric-Only Mode
+
+```bash
+ncrs 127.0.0.1 80 -n -v
+```
+
+Use `-n` to suppress name resolution. With `-n`, the destination must be a numeric IP address.
+
+This should fail because DNS is disabled:
+
+```bash
+ncrs localhost 80 -n -v
+```
 
 ### Source Address
 

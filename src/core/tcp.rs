@@ -80,28 +80,29 @@ pub async fn run_client(
     crlf: bool,
     source_addr: Option<String>,
     source_port: Option<u16>,
+    numeric: bool,
 ) -> anyhow::Result<()> {
     let addr = format_endpoint(&target, port);
 
     if verbose {
-        println!(
-            "{} [{}] Connecting to {}...",
-            "[*]".yellow(),
-            family.label(),
-            addr
-        );
+        let mode = if numeric { "numeric" } else { family.label() };
+        println!("{} [{}] Connecting to {}...", "[*]".yellow(), mode, addr);
     }
 
     let timeout_duration = std::time::Duration::from_secs(timeout_secs);
 
-    if verbose {
+    if verbose && !numeric {
         println!("{} Resolving address...", "[*]".yellow());
     }
 
-    let target_addr = resolve_address(&target, port, family, timeout_duration).await?;
+    let target_addr = resolve_address(&target, port, family, timeout_duration, numeric).await?;
 
     if verbose {
-        println!("{} Resolved to: {}", "[*]".yellow(), target_addr);
+        if numeric {
+            println!("{} Using numeric address: {}", "[*]".yellow(), target_addr);
+        } else {
+            println!("{} Resolved to: {}", "[*]".yellow(), target_addr);
+        }
         println!("{} Connecting...", "[*]".yellow());
     }
 

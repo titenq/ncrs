@@ -1,3 +1,5 @@
+use std::net::{IpAddr, SocketAddr};
+
 #[derive(Clone, Copy)]
 pub enum AddressFamily {
     Any,
@@ -28,7 +30,12 @@ pub(crate) async fn resolve_address(
     port: u16,
     family: AddressFamily,
     timeout_duration: std::time::Duration,
+    numeric: bool,
 ) -> anyhow::Result<std::net::SocketAddr> {
+    if numeric {
+        return parse_numeric_address(target, port, family);
+    }
+
     let endpoint = format_endpoint(target, port);
     let addrs =
         match tokio::time::timeout(timeout_duration, tokio::net::lookup_host(&endpoint)).await {
@@ -50,4 +57,25 @@ pub(crate) async fn resolve_address(
         })
         .next()
         .ok_or_else(|| anyhow::anyhow!("Could not resolve to any {} address", family.label()))
+}
+
+pub(crate) fn parse_numeric_address(
+    target: &str,
+    port: u16,
+    family: AddressFamily,
+) -> anyhow::Result<SocketAddr> {
+    let ip = target.parse::<IpAddr>().map_err(|_| {
+        anyhow::anyhow!("Name resolution disabled by -n; destination must be a numeric IP address")
+    })?;
+    let addr = SocketAddr::new(ip, port);
+
+    match family {
+        AddressFamily::Any => Ok(addr),
+        AddressFamily::Ipv4 if addr.is_ipv4() => Ok(addr),
+        AddressFamily::Ipv6 if addr.is_ipv6() => Ok(addr),
+        _ => Err(anyhow::anyhow!(
+            "Destination address family does not match requested {} mode",
+            family.label()
+        )),
+    }
 }

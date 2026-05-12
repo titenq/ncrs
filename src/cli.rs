@@ -43,6 +43,10 @@ pub struct Args {
     #[arg(short = 'u', long)]
     pub udp: bool,
 
+    /// [Flag: -n] Suppress name resolution; destination must be a numeric IP
+    #[arg(short = 'n', long)]
+    pub numeric: bool,
+
     /// [Flag: -4] IPv4 mode: force usage of IPv4 addresses
     #[arg(short = '4', long, conflicts_with = "ipv6")]
     pub ipv4: bool,
