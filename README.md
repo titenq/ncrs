@@ -13,6 +13,7 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 - Full-duplex I/O with Tokio.
 - Port scanning with `-z`, including port ranges such as `20-100`.
 - Connection timeout with `-w`.
+- IPv4 mode with `-4`.
 - IPv6 mode with `-6`.
 - CRLF conversion with `-C`.
 - Persistent listen mode with `-k`.
@@ -25,7 +26,7 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 Implemented flags:
 
 ```text
--6 -C -k -l -p -s -u -v -w -z
+-4 -6 -C -k -l -p -s -u -v -w -z
 ```
 
 Important differences from OpenBSD `nc`:
@@ -33,7 +34,7 @@ Important differences from OpenBSD `nc`:
 - In OpenBSD `nc`, `-s` means local source address. In `ncrs`, `-s` currently enables TLS.
 - In OpenBSD `nc`, `-p` is the local source port for outbound connections. In `ncrs`, `-p` is mainly used as the listen port.
 - `ncrs -k` accepts multiple sequential inbound connections, but it currently handles one active TCP connection at a time.
-- OpenBSD options such as `-4`, `-b`, `-D`, `-d`, `-F`, `-h`, `-I`, `-i`, `-M`, `-m`, `-N`, `-n`, `-O`, `-P`, `-q`, `-r`, `-S`, `-T`, `-t`, `-U`, `-V`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
+- OpenBSD options such as `-b`, `-D`, `-d`, `-F`, `-h`, `-I`, `-i`, `-M`, `-m`, `-N`, `-n`, `-O`, `-P`, `-q`, `-r`, `-S`, `-T`, `-t`, `-U`, `-V`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
 
 ## Requirements
 
@@ -106,6 +107,12 @@ ncrs localhost 20-100 -z -v
 
 ```bash
 ncrs 8.8.8.8 80 -w 10
+```
+
+### IPv4
+
+```bash
+ncrs google.com 80 -4 -v
 ```
 
 ### IPv6

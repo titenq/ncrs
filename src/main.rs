@@ -42,6 +42,10 @@ struct Args {
     #[arg(short = 'u', long)]
     udp: bool,
 
+    /// [Flag: -4] IPv4 mode: force usage of IPv4 addresses
+    #[arg(short = '4', long, conflicts_with = "ipv6")]
+    ipv4: bool,
+
     /// [Flag: -6] IPv6 mode: force usage of IPv6 addresses
     #[arg(short = '6', long)]
     ipv6: bool,
@@ -69,15 +73,23 @@ async fn main() -> anyhow::Result<()> {
         all_ports.extend(common::parse_port_range(p_arg));
     }
 
+    let family = if args.ipv4 {
+        core::AddressFamily::Ipv4
+    } else if args.ipv6 {
+        core::AddressFamily::Ipv6
+    } else {
+        core::AddressFamily::Any
+    };
+
     if args.scan {
         if let Some(target) = args.target {
-            core::run_port_scan(target, all_ports, args.timeout, args.verbose).await?;
+            core::run_port_scan(target, all_ports, args.timeout, args.verbose, family).await?;
         }
     } else if args.udp {
         let port = args
             .p_port
             .unwrap_or_else(|| all_ports.first().copied().unwrap_or(4444));
-        core::run_udp_node(args.target, port, args.listen, args.verbose).await?;
+        core::run_udp_node(args.target, port, args.listen, args.verbose, family).await?;
     } else if args.listen {
         let port = args.p_port.unwrap_or(4444);
 
@@ -90,7 +102,7 @@ async fn main() -> anyhow::Result<()> {
             }
             loop {
                 if let Err(e) =
-                    core::run_server(port, args.verbose, args.secure, args.ipv6, args.crlf).await
+                    core::run_server(port, args.verbose, args.secure, family, args.crlf).await
                 {
                     if args.verbose {
                         eprintln!("{} Connection closed or error: {}", "[!]".red(), e);
@@ -100,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             }
         } else {
-            core::run_server(port, args.verbose, args.secure, args.ipv6, args.crlf).await?;
+            core::run_server(port, args.verbose, args.secure, family, args.crlf).await?;
         }
     } else if let (Some(target), Some(&port)) = (args.target, all_ports.first()) {
         core::run_client(
@@ -109,7 +121,7 @@ async fn main() -> anyhow::Result<()> {
             args.verbose,
             args.secure,
             args.timeout,
-            args.ipv6,
+            family,
             args.crlf,
         )
         .await?;

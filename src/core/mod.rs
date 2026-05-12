@@ -10,24 +10,78 @@ use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_rustls::rustls::{ClientConfig, RootCertStore, ServerConfig};
 use tokio_rustls::{TlsAcceptor, TlsConnector};
 
+#[derive(Clone, Copy)]
+pub enum AddressFamily {
+    Any,
+    Ipv4,
+    Ipv6,
+}
+
+impl AddressFamily {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Any => "IPv4/IPv6/DNS",
+            Self::Ipv4 => "IPv4",
+            Self::Ipv6 => "IPv6",
+        }
+    }
+}
+
+fn format_endpoint(target: &str, port: u16) -> String {
+    if !target.contains('[') && target.contains(':') {
+        format!("[{}]:{}", target, port)
+    } else {
+        format!("{}:{}", target, port)
+    }
+}
+
+async fn resolve_address(
+    target: &str,
+    port: u16,
+    family: AddressFamily,
+    timeout_duration: std::time::Duration,
+) -> anyhow::Result<std::net::SocketAddr> {
+    let endpoint = format_endpoint(target, port);
+    let addrs =
+        match tokio::time::timeout(timeout_duration, tokio::net::lookup_host(&endpoint)).await {
+            Ok(Ok(iter)) => iter,
+            Ok(Err(e)) => return Err(anyhow::anyhow!("Failed to resolve {}: {}", endpoint, e)),
+            Err(_) => {
+                return Err(anyhow::anyhow!(
+                    "DNS resolution timed out after {}s",
+                    timeout_duration.as_secs()
+                ));
+            }
+        };
+
+    addrs
+        .filter(|addr| match family {
+            AddressFamily::Any => true,
+            AddressFamily::Ipv4 => addr.is_ipv4(),
+            AddressFamily::Ipv6 => addr.is_ipv6(),
+        })
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("Could not resolve to any {} address", family.label()))
+}
+
 pub async fn run_client(
     target: String,
     port: u16,
     verbose: bool,
     secure: bool,
     timeout_secs: u64,
-    ipv6: bool,
+    family: AddressFamily,
     crlf: bool,
 ) -> anyhow::Result<()> {
-    let addr = if ipv6 && !target.contains('[') && target.contains(':') {
-        format!("[{}]:{}", target, port)
-    } else {
-        format!("{}:{}", target, port)
-    };
+    let addr = format_endpoint(&target, port);
 
     if verbose {
-        let proto = if ipv6 { "IPv6" } else { "IPv4/DNS" };
-        println!("{} [{}] Connecting to {}...", "[*]".yellow(), proto, addr);
+        println!(
+            "{} [{}] Connecting to {}...",
+            "[*]".yellow(),
+            family.label(),
+            addr
+        );
     }
 
     let timeout_duration = std::time::Duration::from_secs(timeout_secs);
@@ -36,21 +90,7 @@ pub async fn run_client(
         println!("{} Resolving address...", "[*]".yellow());
     }
 
-    let mut addrs =
-        match tokio::time::timeout(timeout_duration, tokio::net::lookup_host(&addr)).await {
-            Ok(Ok(iter)) => iter,
-            Ok(Err(e)) => return Err(anyhow::anyhow!("Failed to resolve {}: {}", addr, e)),
-            Err(_) => {
-                return Err(anyhow::anyhow!(
-                    "DNS resolution timed out after {}s",
-                    timeout_secs
-                ));
-            }
-        };
-
-    let target_addr = addrs
-        .next()
-        .ok_or_else(|| anyhow::anyhow!("Could not resolve to any IP address"))?;
+    let target_addr = resolve_address(&target, port, family, timeout_duration).await?;
 
     if verbose {
         println!("{} Resolved to: {}", "[*]".yellow(), target_addr);
@@ -147,13 +187,12 @@ pub async fn run_server(
     port: u16,
     verbose: bool,
     secure: bool,
-    ipv6: bool,
+    family: AddressFamily,
     crlf: bool,
 ) -> anyhow::Result<()> {
-    let addr = if ipv6 {
-        format!("[::]:{}", port)
-    } else {
-        format!("0.0.0.0:{}", port)
+    let addr = match family {
+        AddressFamily::Any | AddressFamily::Ipv4 => format!("0.0.0.0:{}", port),
+        AddressFamily::Ipv6 => format!("[::]:{}", port),
     };
 
     let listener = TcpListener::bind(&addr).await?;
@@ -204,6 +243,7 @@ pub async fn run_port_scan(
     ports: Vec<u16>,
     timeout_secs: u64,
     verbose: bool,
+    family: AddressFamily,
 ) -> anyhow::Result<()> {
     let target = Arc::new(target);
     let mut handles = vec![];
@@ -220,10 +260,11 @@ pub async fn run_port_scan(
     for port in ports {
         let t = Arc::clone(&target);
         handles.push(tokio::spawn(async move {
-            let addr = format!("{}:{}", t, port);
             let timeout = std::time::Duration::from_secs(timeout_secs);
-            if let Ok(Ok(_)) = tokio::time::timeout(timeout, TcpStream::connect(&addr)).await {
-                println!("{} port {} open", "Connection to".green(), port);
+            if let Ok(addr) = resolve_address(&t, port, family, timeout).await {
+                if let Ok(Ok(_)) = tokio::time::timeout(timeout, TcpStream::connect(addr)).await {
+                    println!("{} port {} open", "Connection to".green(), port);
+                }
             }
         }));
     }
@@ -306,11 +347,13 @@ pub async fn run_udp_node(
     port: u16,
     listen: bool,
     verbose: bool,
+    family: AddressFamily,
 ) -> anyhow::Result<()> {
-    let addr = if listen {
-        format!("0.0.0.0:{}", port)
-    } else {
-        "0.0.0.0:0".to_string()
+    let addr = match (listen, family) {
+        (true, AddressFamily::Ipv6) => format!("[::]:{}", port),
+        (true, AddressFamily::Any | AddressFamily::Ipv4) => format!("0.0.0.0:{}", port),
+        (false, AddressFamily::Ipv6) => "[::]:0".to_string(),
+        (false, AddressFamily::Any | AddressFamily::Ipv4) => "0.0.0.0:0".to_string(),
     };
 
     let socket = UdpSocket::bind(&addr).await?;
@@ -363,7 +406,7 @@ pub async fn run_udp_node(
         }
     } else {
         let target_str = target.ok_or_else(|| anyhow::anyhow!("Target required"))?;
-        let target_addr = format!("{}:{}", target_str, port);
+        let target_addr = format_endpoint(&target_str, port);
 
         tokio::select! {
             res = async {
