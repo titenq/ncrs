@@ -1,67 +1,11 @@
+mod cli;
 mod common;
 mod core;
 
 use clap::Parser;
+use cli::Args;
 use colored::*;
 use figlet_rs::FIGfont;
-
-#[derive(Parser, Debug)]
-#[command(name = "ncrs", author = "TitenQ", version = "0.1.0")]
-struct Args {
-    /// Target IP address or Hostname
-    target: Option<String>,
-
-    /// Port(s) to connect to (e.g., 80 or 20-100)
-    ports: Vec<String>,
-
-    /// [Flag: -l] Listen mode: waits for incoming connections
-    #[arg(short = 'l', long)]
-    listen: bool,
-
-    /// [Flag: -v] Verbose mode: prints detailed connection info
-    #[arg(short = 'v', long)]
-    verbose: bool,
-
-    /// [Flag: -z] Zero-I/O mode: used for port scanning
-    #[arg(short = 'z', long)]
-    scan: bool,
-
-    /// [Flag: -p] Local source port for outbound connections; listen port with -l
-    #[arg(short = 'p', long)]
-    p_port: Option<u16>,
-
-    /// [Flag: -s] Local source address for outbound connections
-    #[arg(short = 's', long = "sourceaddr", value_name = "SOURCEADDR")]
-    source_addr: Option<String>,
-
-    /// [ncrs extension] Use TLS for the connection
-    #[arg(long = "tls")]
-    tls: bool,
-
-    /// [Flag: -w] Connection timeout: maximum seconds to wait for a response
-    #[arg(short = 'w', long, default_value = "5")]
-    timeout: u64,
-
-    /// [Flag: -u] UDP mode: uses UDP instead of the default TCP
-    #[arg(short = 'u', long)]
-    udp: bool,
-
-    /// [Flag: -4] IPv4 mode: force usage of IPv4 addresses
-    #[arg(short = '4', long, conflicts_with = "ipv6")]
-    ipv4: bool,
-
-    /// [Flag: -6] IPv6 mode: force usage of IPv6 addresses
-    #[arg(short = '6', long)]
-    ipv6: bool,
-
-    /// [Flag: -C] Send CRLF as line-ending instead of just LF
-    #[arg(short = 'C', long)]
-    crlf: bool,
-
-    /// [Flag: -k] Keep-alive: accept multiple connections in listen mode
-    #[arg(short = 'k', long)]
-    keep_alive: bool,
-}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

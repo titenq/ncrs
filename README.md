@@ -208,10 +208,16 @@ Do not commit `key.pem`.
 ```text
 ncrs/
 ├── src/
+│   ├── cli.rs
 │   ├── common/
 │   │   └── mod.rs
 │   ├── core/
-│   │   └── mod.rs
+│   │   ├── address.rs
+│   │   ├── duplex.rs
+│   │   ├── mod.rs
+│   │   ├── scan.rs
+│   │   ├── tcp.rs
+│   │   └── udp.rs
 │   └── main.rs
 ├── Cargo.lock
 ├── Cargo.toml
