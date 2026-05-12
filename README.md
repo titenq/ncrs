@@ -40,9 +40,6 @@ Options:
   -z, --scan                     Zero-I/O mode: used for port scanning
   -p, --source-port <PORT>       Local source port for outbound connections
   -s, --sourceaddr <SOURCEADDR>  Local source address for outbound connections
-      --tls                      ncrs extension: use TLS for the connection
-      --tls-gen                  ncrs extension: generate cert.pem and key.pem
-      --tls-gen-force            ncrs extension: generate and overwrite TLS files
   -w, --timeout <TIMEOUT>        Connection timeout in seconds
   -u, --udp                      UDP mode
   -n, --numeric                  Suppress name resolution
@@ -50,6 +47,9 @@ Options:
   -6, --ipv6                     Force IPv6
   -C, --crlf                     Send CRLF as line-ending
   -k, --keep-alive               Keep accepting sequential inbound connections
+      --tls                      ncrs extension: use TLS for the connection
+      --tls-gen                  ncrs extension: generate TLS files in ~/.config/ncrs
+      --tls-gen-force            ncrs extension: generate and overwrite TLS files
 ```
 
 Important differences from OpenBSD `nc`:
@@ -237,11 +237,20 @@ Generate a local certificate and key for server-side testing:
 ncrs --tls-gen
 ```
 
+This creates:
+
+```text
+~/.config/ncrs/cert.pem
+~/.config/ncrs/key.pem
+```
+
 Use `--tls-gen-force` to overwrite existing `cert.pem` and `key.pem`:
 
 ```bash
 ncrs --tls-gen-force
 ```
+
+When `--tls` is used, `ncrs` reads TLS files from `~/.config/ncrs` first. If they are not found there, it falls back to `cert.pem` and `key.pem` in the current directory.
 
 Terminal 1 (server):
 
@@ -257,7 +266,7 @@ ncrs localhost 8443 -v --tls
 
 Use `--tls` when both sides should communicate through a TLS session.
 
-Do not commit `key.pem`.
+Do not commit `key.pem` if you generate TLS files in a project directory.
 
 ## Project Structure
 

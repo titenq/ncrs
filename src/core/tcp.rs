@@ -2,6 +2,7 @@ use crate::core::address::{AddressFamily, format_endpoint, resolve_address};
 use crate::core::duplex::{
     convert_lf_to_crlf, handle_duplex, handle_duplex_with_input, handle_duplex_with_timeout,
 };
+use crate::tls;
 use colored::*;
 use std::fs::File;
 use std::io::BufReader;
@@ -123,8 +124,8 @@ pub async fn run_client(
 
         root_cert_store.add_parsable_certificates(cert_result.certs);
 
-        if std::path::Path::new("cert.pem").exists() {
-            let cert_file = File::open("cert.pem")?;
+        if let Some(cert_path) = tls::resolve_client_cert_path()? {
+            let cert_file = File::open(cert_path)?;
             let mut reader = BufReader::new(cert_file);
             let certs = rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?;
 
@@ -230,11 +231,12 @@ async fn handle_server_stream(
             println!("{} Loading certificates and private key...", "[*]".yellow());
         }
 
-        let cert_file = File::open("cert.pem")?;
+        let tls_paths = tls::resolve_server_tls_paths()?;
+        let cert_file = File::open(tls_paths.cert)?;
         let mut cert_reader = BufReader::new(cert_file);
         let certs = rustls_pemfile::certs(&mut cert_reader).collect::<Result<Vec<_>, _>>()?;
 
-        let key_file = File::open("key.pem")?;
+        let key_file = File::open(tls_paths.key)?;
         let mut key_reader = BufReader::new(key_file);
         let key = rustls_pemfile::private_key(&mut key_reader)?
             .ok_or_else(|| anyhow::anyhow!("No private key found"))?;
@@ -286,11 +288,12 @@ async fn handle_server_stream_with_input(
             println!("{} Loading certificates and private key...", "[*]".yellow());
         }
 
-        let cert_file = File::open("cert.pem")?;
+        let tls_paths = tls::resolve_server_tls_paths()?;
+        let cert_file = File::open(tls_paths.cert)?;
         let mut cert_reader = BufReader::new(cert_file);
         let certs = rustls_pemfile::certs(&mut cert_reader).collect::<Result<Vec<_>, _>>()?;
 
-        let key_file = File::open("key.pem")?;
+        let key_file = File::open(tls_paths.key)?;
         let mut key_reader = BufReader::new(key_file);
         let key = rustls_pemfile::private_key(&mut key_reader)?
             .ok_or_else(|| anyhow::anyhow!("No private key found"))?;

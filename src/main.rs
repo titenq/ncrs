@@ -18,7 +18,13 @@ async fn main() -> anyhow::Result<()> {
 
     if args.tls_gen || args.tls_gen_force {
         tls::generate_self_signed_cert(args.tls_gen_force)?;
-        println!("{} Generated cert.pem and key.pem", "[+]".green());
+        let paths = tls::config_tls_paths()?;
+        println!(
+            "{} Generated {} and {}",
+            "[+]".green(),
+            paths.cert.display(),
+            paths.key.display()
+        );
         return Ok(());
     }
 
