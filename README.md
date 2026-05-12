@@ -21,6 +21,7 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 - Local source address selection with `-s`.
 - Local source port selection with `-p`.
 - Optional TLS mode with `--tls`.
+- Local TLS certificate generation with `--tls-gen` and `--tls-gen-force`.
 
 ## Compatibility Notes
 
@@ -40,6 +41,8 @@ Options:
   -p, --source-port <PORT>       Local source port for outbound connections
   -s, --sourceaddr <SOURCEADDR>  Local source address for outbound connections
       --tls                      ncrs extension: use TLS for the connection
+      --tls-gen                  ncrs extension: generate cert.pem and key.pem
+      --tls-gen-force            ncrs extension: generate and overwrite TLS files
   -w, --timeout <TIMEOUT>        Connection timeout in seconds
   -u, --udp                      UDP mode
   -n, --numeric                  Suppress name resolution
@@ -52,6 +55,7 @@ Options:
 Important differences from OpenBSD `nc`:
 
 - `--tls` is an `ncrs` extension and is not an OpenBSD `nc` flag.
+- `--tls-gen` and `--tls-gen-force` are `ncrs` extensions and are not OpenBSD `nc` flags.
 - OpenBSD options such as `-b`, `-D`, `-d`, `-F`, `-h`, `-I`, `-i`, `-M`, `-m`, `-N`, `-O`, `-P`, `-q`, `-r`, `-S`, `-T`, `-t`, `-U`, `-V`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
 
 ## Requirements
@@ -230,14 +234,13 @@ TLS is enabled with `--tls`.
 Generate a local certificate and key for server-side testing:
 
 ```bash
-openssl req -new -x509 -newkey rsa:2048 -nodes \
-    -keyout key.pem \
-    -out cert.pem \
-    -days 365 \
-    -subj "/CN=localhost" \
-    -addext "subjectAltName = DNS:localhost,IP:127.0.0.1" \
-    -addext "basicConstraints = CA:FALSE" \
-    -addext "keyUsage = digitalSignature, keyEncipherment"
+ncrs --tls-gen
+```
+
+Use `--tls-gen-force` to overwrite existing `cert.pem` and `key.pem`:
+
+```bash
+ncrs --tls-gen-force
 ```
 
 Terminal 1 (server):
@@ -271,7 +274,8 @@ ncrs/
 │   │   ├── scan.rs
 │   │   ├── tcp.rs
 │   │   └── udp.rs
-│   └── main.rs
+│   ├── main.rs
+│   └── tls.rs
 ├── Cargo.lock
 ├── Cargo.toml
 ├── LICENSE.txt

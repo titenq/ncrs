@@ -1,6 +1,7 @@
 mod cli;
 mod common;
 mod core;
+mod tls;
 
 use clap::Parser;
 use cli::Args;
@@ -13,6 +14,12 @@ async fn main() -> anyhow::Result<()> {
 
     if let Some(figure) = FIGfont::standard().unwrap().convert("ncrs") {
         println!("{}", figure.to_string().cyan().bold());
+    }
+
+    if args.tls_gen || args.tls_gen_force {
+        tls::generate_self_signed_cert(args.tls_gen_force)?;
+        println!("{} Generated cert.pem and key.pem", "[+]".green());
+        return Ok(());
     }
 
     let mut all_ports = vec![];

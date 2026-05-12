@@ -35,6 +35,14 @@ pub struct Args {
     #[arg(long = "tls")]
     pub tls: bool,
 
+    /// [ncrs extension] Generate local cert.pem and key.pem for TLS testing
+    #[arg(long = "tls-gen")]
+    pub tls_gen: bool,
+
+    /// [ncrs extension] Generate local cert.pem and key.pem, overwriting existing files
+    #[arg(long = "tls-gen-force")]
+    pub tls_gen_force: bool,
+
     /// [Flag: -w] Connection timeout: maximum seconds to wait for a response
     #[arg(short = 'w', long, value_name = "TIMEOUT")]
     pub timeout: Option<u64>,
