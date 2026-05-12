@@ -83,21 +83,11 @@ async fn main() -> anyhow::Result<()> {
         if args.keep_alive {
             if args.verbose {
                 println!(
-                    "{} Persistent mode active (-k). Server will restart after logout.",
+                    "{} Persistent mode active (-k). Listener will keep accepting connections.",
                     "[*]".blue()
                 );
             }
-            loop {
-                if let Err(e) =
-                    core::run_server(port, args.verbose, args.tls, family, args.crlf).await
-                {
-                    if args.verbose {
-                        eprintln!("{} Connection closed or error: {}", "[!]".red(), e);
-                    }
-                }
-
-                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-            }
+            core::run_server_persistent(port, args.verbose, args.tls, family, args.crlf).await?;
         } else {
             core::run_server(port, args.verbose, args.tls, family, args.crlf).await?;
         }

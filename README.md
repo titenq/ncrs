@@ -50,7 +50,6 @@ Options:
 Important differences from OpenBSD `nc`:
 
 - `--tls` is an `ncrs` extension and is not an OpenBSD `nc` flag.
-- `ncrs -k` accepts multiple sequential inbound connections, but it currently handles one active TCP connection at a time.
 - OpenBSD options such as `-b`, `-D`, `-d`, `-F`, `-h`, `-I`, `-i`, `-M`, `-m`, `-N`, `-n`, `-O`, `-P`, `-q`, `-r`, `-S`, `-T`, `-t`, `-U`, `-V`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
 
 ## Requirements

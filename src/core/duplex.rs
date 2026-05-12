@@ -1,4 +1,5 @@
 use tokio::io::{self, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::sync::broadcast;
 
 pub(crate) async fn handle_duplex<S>(stream: S, crlf: bool) -> anyhow::Result<()>
 where
@@ -17,17 +18,7 @@ where
             }
 
             if crlf {
-                let mut data = Vec::with_capacity(n * 2);
-                let mut previous_was_cr = false;
-
-                for &byte in &buf[..n] {
-                    if byte == b'\n' && !previous_was_cr {
-                        data.push(b'\r');
-                    }
-                    data.push(byte);
-                    previous_was_cr = byte == b'\r';
-                }
-
+                let data = convert_lf_to_crlf(&buf[..n]);
                 writer.write_all(&data).await?;
             } else {
                 writer.write_all(&buf[..n]).await?;
@@ -60,4 +51,58 @@ where
     }
 
     Ok(())
+}
+
+pub(crate) async fn handle_duplex_with_input<S>(
+    stream: S,
+    mut input_rx: broadcast::Receiver<Vec<u8>>,
+) -> anyhow::Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    let (mut reader, mut writer) = io::split(stream);
+    let socket_to_stdout = tokio::spawn(async move {
+        let mut stdout = io::stdout();
+        io::copy(&mut reader, &mut stdout).await
+    });
+
+    tokio::pin!(socket_to_stdout);
+
+    loop {
+        tokio::select! {
+            res = &mut socket_to_stdout => {
+                res??;
+                return Ok(());
+            },
+            input = input_rx.recv() => {
+                match input {
+                    Ok(data) => {
+                        writer.write_all(&data).await?;
+                        writer.flush().await?;
+                    }
+                    Err(broadcast::error::RecvError::Lagged(_)) => {}
+                    Err(broadcast::error::RecvError::Closed) => {
+                        writer.shutdown().await?;
+                        socket_to_stdout.await??;
+                        return Ok(());
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub(crate) fn convert_lf_to_crlf(input: &[u8]) -> Vec<u8> {
+    let mut data = Vec::with_capacity(input.len() * 2);
+    let mut previous_was_cr = false;
+
+    for &byte in input {
+        if byte == b'\n' && !previous_was_cr {
+            data.push(b'\r');
+        }
+        data.push(byte);
+        previous_was_cr = byte == b'\r';
+    }
+
+    data
 }
