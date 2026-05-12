@@ -60,43 +60,51 @@ sudo cp target/release/ncrs /usr/local/bin/
 
 ### TCP
 
-Server:
+Terminal 1 (server):
 
 ```bash
 ncrs -l -p 8080 -v
 ```
 
-Client:
+Terminal 2 (client):
 
 ```bash
 ncrs 127.0.0.1 8080 -v
 ```
 
+Use TCP mode for a basic bidirectional connection between two terminals.
+
 ### Persistent Listen Mode
+
+Terminal 1 (server):
 
 ```bash
 ncrs -l -p 8080 -k -v
 ```
 
-Then connect more than once from another terminal:
+Terminal 2 (client):
 
 ```bash
 ncrs 127.0.0.1 8080 -v
 ```
 
+Stop Terminal 2 and run it again. With `-k`, Terminal 1 keeps accepting sequential inbound connections.
+
 ### UDP
 
-Server:
+Terminal 1 (server):
 
 ```bash
 ncrs -l -p 8080 -u -v
 ```
 
-Client:
+Terminal 2 (client):
 
 ```bash
 ncrs 127.0.0.1 8080 -u -v
 ```
+
+Use `-u` when you want datagram-based communication instead of TCP.
 
 ### Port Scan
 
@@ -104,21 +112,25 @@ ncrs 127.0.0.1 8080 -u -v
 ncrs localhost 20-100 -z -v
 ```
 
+Use `-z` to test whether ports are open without entering interactive I/O mode.
+
 ### Timeout
 
 ```bash
 ncrs 8.8.8.8 80 -w 10
 ```
 
+Use `-w` to limit DNS resolution and TCP connection wait time.
+
 ### Source Address
 
-Terminal 1:
+Terminal 1 (server):
 
 ```bash
 ncrs -l -p 8080 -4 -v
 ```
 
-Terminal 2:
+Terminal 2 (client):
 
 ```bash
 ncrs 127.0.0.1 8080 -s 127.0.0.1 -4 -v
@@ -132,11 +144,15 @@ Use `-s` to choose the local address used for outbound connections. This is usef
 ncrs google.com 80 -4 -v
 ```
 
+Use `-4` to force IPv4 address resolution and connection.
+
 ### IPv6
 
 ```bash
 ncrs ::1 8080 -6 -v
 ```
+
+Use `-6` to force IPv6 address resolution and connection.
 
 ### HTTP With CRLF
 
@@ -150,7 +166,6 @@ After connecting, type:
 GET / HTTP/1.1
 Host: google.com
 Connection: close
-
 ```
 
 The empty line finishes the HTTP headers.
@@ -172,17 +187,19 @@ openssl req -new -x509 -newkey rsa:2048 -nodes \
     -addext "keyUsage = digitalSignature, keyEncipherment"
 ```
 
-Server:
+Terminal 1 (server):
 
 ```bash
 ncrs -l -p 8443 -v --tls
 ```
 
-Client:
+Terminal 2 (client):
 
 ```bash
 ncrs localhost 8443 -v --tls
 ```
+
+Use `--tls` when both sides should communicate through a TLS session.
 
 Do not commit `key.pem`.
 
