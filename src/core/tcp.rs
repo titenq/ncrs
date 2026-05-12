@@ -1,5 +1,7 @@
 use crate::core::address::{AddressFamily, format_endpoint, resolve_address};
-use crate::core::duplex::{convert_lf_to_crlf, handle_duplex, handle_duplex_with_input};
+use crate::core::duplex::{
+    convert_lf_to_crlf, handle_duplex, handle_duplex_with_input, handle_duplex_with_timeout,
+};
 use colored::*;
 use std::fs::File;
 use std::io::BufReader;
@@ -81,6 +83,7 @@ pub async fn run_client(
     source_addr: Option<String>,
     source_port: Option<u16>,
     numeric: bool,
+    read_timeout: Option<std::time::Duration>,
 ) -> anyhow::Result<()> {
     let addr = format_endpoint(&target, port);
 
@@ -137,10 +140,18 @@ pub async fn run_client(
         let tls_stream = connector.connect(domain, stream).await?;
 
         print_connected(verbose, crlf);
-        handle_duplex(tls_stream, crlf).await
+        if let Some(timeout_duration) = read_timeout {
+            handle_duplex_with_timeout(tls_stream, crlf, timeout_duration).await
+        } else {
+            handle_duplex(tls_stream, crlf).await
+        }
     } else {
         print_connected(verbose, crlf);
-        handle_duplex(stream, crlf).await
+        if let Some(timeout_duration) = read_timeout {
+            handle_duplex_with_timeout(stream, crlf, timeout_duration).await
+        } else {
+            handle_duplex(stream, crlf).await
+        }
     }
 }
 
@@ -150,11 +161,12 @@ pub async fn run_server(
     tls: bool,
     family: AddressFamily,
     crlf: bool,
+    read_timeout: Option<std::time::Duration>,
 ) -> anyhow::Result<()> {
     let listener = bind_listener(port, family).await?;
     let (stream, remote_addr) = listener.accept().await?;
 
-    handle_server_stream(stream, remote_addr, verbose, tls, crlf).await
+    handle_server_stream(stream, remote_addr, verbose, tls, crlf, read_timeout).await
 }
 
 pub async fn run_server_persistent(
@@ -163,6 +175,7 @@ pub async fn run_server_persistent(
     tls: bool,
     family: AddressFamily,
     crlf: bool,
+    read_timeout: Option<std::time::Duration>,
 ) -> anyhow::Result<()> {
     let listener = bind_listener(port, family).await?;
     let (input_tx, _) = broadcast::channel(16);
@@ -172,8 +185,15 @@ pub async fn run_server_persistent(
         let (stream, remote_addr) = listener.accept().await?;
         let input_rx = input_tx.subscribe();
 
-        if let Err(e) =
-            handle_server_stream_with_input(stream, remote_addr, verbose, tls, input_rx).await
+        if let Err(e) = handle_server_stream_with_input(
+            stream,
+            remote_addr,
+            verbose,
+            tls,
+            input_rx,
+            read_timeout,
+        )
+        .await
         {
             if verbose {
                 eprintln!("{} Connection closed or error: {}", "[!]".red(), e);
@@ -199,6 +219,7 @@ async fn handle_server_stream(
     verbose: bool,
     tls: bool,
     crlf: bool,
+    read_timeout: Option<std::time::Duration>,
 ) -> anyhow::Result<()> {
     if verbose {
         println!("{} Connection from {}", "[+]".green(), remote_addr);
@@ -234,9 +255,17 @@ async fn handle_server_stream(
             println!("{} TLS Handshake successful!", "[+]".green());
         }
 
-        handle_duplex(tls_stream, crlf).await
+        if let Some(timeout_duration) = read_timeout {
+            handle_duplex_with_timeout(tls_stream, crlf, timeout_duration).await
+        } else {
+            handle_duplex(tls_stream, crlf).await
+        }
     } else {
-        handle_duplex(stream, crlf).await
+        if let Some(timeout_duration) = read_timeout {
+            handle_duplex_with_timeout(stream, crlf, timeout_duration).await
+        } else {
+            handle_duplex(stream, crlf).await
+        }
     }
 }
 
@@ -246,6 +275,7 @@ async fn handle_server_stream_with_input(
     verbose: bool,
     tls: bool,
     input_rx: broadcast::Receiver<Vec<u8>>,
+    read_timeout: Option<std::time::Duration>,
 ) -> anyhow::Result<()> {
     if verbose {
         println!("{} Connection from {}", "[+]".green(), remote_addr);
@@ -281,9 +311,9 @@ async fn handle_server_stream_with_input(
             println!("{} TLS Handshake successful!", "[+]".green());
         }
 
-        handle_duplex_with_input(tls_stream, input_rx).await
+        handle_duplex_with_input(tls_stream, input_rx, read_timeout).await
     } else {
-        handle_duplex_with_input(stream, input_rx).await
+        handle_duplex_with_input(stream, input_rx, read_timeout).await
     }
 }
 

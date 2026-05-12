@@ -1,9 +1,11 @@
 use crate::core::address::{AddressFamily, format_endpoint, parse_numeric_address};
 use colored::*;
+use std::io::Read;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
-use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
+use tokio::io::{self, AsyncWriteExt};
 use tokio::net::UdpSocket;
+use tokio::sync::mpsc;
 
 pub async fn run_udp_node(
     target: Option<String>,
@@ -14,6 +16,7 @@ pub async fn run_udp_node(
     source_addr: Option<String>,
     source_port: Option<u16>,
     numeric: bool,
+    read_timeout: Option<std::time::Duration>,
 ) -> anyhow::Result<()> {
     let addr = udp_bind_addr(listen, port, family, source_addr.as_deref(), source_port)?;
 
@@ -35,7 +38,7 @@ pub async fn run_udp_node(
 
     if listen {
         let mut buf = [0u8; 65535];
-        let (len, peer) = r_socket.recv_from(&mut buf).await?;
+        let (len, peer) = recv_from_with_timeout(&r_socket, &mut buf, read_timeout).await?;
 
         io::stdout().write_all(&buf[..len]).await?;
         io::stdout().flush().await?;
@@ -45,13 +48,11 @@ pub async fn run_udp_node(
         }
 
         tokio::select! {
+            res = udp_idle_timeout(read_timeout) => res,
             res = async {
-                let mut stdin = io::stdin();
-                let mut input_buf = [0u8; 65535];
-                loop {
-                    let n = stdin.read(&mut input_buf).await?;
-                    if n == 0 { break; }
-                    s_socket.send_to(&input_buf[..n], peer).await?;
+                let mut stdin_rx = spawn_stdin_reader();
+                while let Some(data) = stdin_rx.recv().await {
+                    s_socket.send_to(&data, peer).await?;
                 }
                 anyhow::Ok(())
             } => res,
@@ -59,7 +60,7 @@ pub async fn run_udp_node(
                 let mut recv_buf = [0u8; 65535];
 
                 loop {
-                    let (n, _) = r_socket.recv_from(&mut recv_buf).await?;
+                    let (n, _) = recv_from_with_timeout(&r_socket, &mut recv_buf, read_timeout).await?;
                     io::stdout().write_all(&recv_buf[..n]).await?;
                     io::stdout().flush().await?;
                 }
@@ -74,25 +75,75 @@ pub async fn run_udp_node(
         };
 
         tokio::select! {
+            res = udp_idle_timeout(read_timeout) => res,
             res = async {
-                let mut stdin = io::stdin();
-                let mut input_buf = [0u8; 65535];
-                loop {
-                    let n = stdin.read(&mut input_buf).await?;
-                    if n == 0 { break; }
-                    s_socket.send_to(&input_buf[..n], &target_addr).await?;
+                let mut stdin_rx = spawn_stdin_reader();
+                while let Some(data) = stdin_rx.recv().await {
+                    s_socket.send_to(&data, &target_addr).await?;
                 }
                 anyhow::Ok(())
             } => res,
             res = async {
                 let mut recv_buf = [0u8; 65535];
                 loop {
-                    let (n, _) = r_socket.recv_from(&mut recv_buf).await?;
+                    let (n, _) = recv_from_with_timeout(&r_socket, &mut recv_buf, read_timeout).await?;
                     io::stdout().write_all(&recv_buf[..n]).await?;
                     io::stdout().flush().await?;
                 }
             } => res,
         }
+    }
+}
+
+fn spawn_stdin_reader() -> mpsc::UnboundedReceiver<Vec<u8>> {
+    let (tx, rx) = mpsc::unbounded_channel();
+
+    std::thread::spawn(move || {
+        let mut stdin = std::io::stdin();
+        let mut buf = [0u8; 65535];
+
+        loop {
+            match stdin.read(&mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    if tx.send(buf[..n].to_vec()).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
+    rx
+}
+
+async fn udp_idle_timeout(read_timeout: Option<std::time::Duration>) -> anyhow::Result<()> {
+    if let Some(timeout_duration) = read_timeout {
+        tokio::time::sleep(timeout_duration).await;
+        Err(anyhow::anyhow!(
+            "UDP receive timed out after {}s",
+            timeout_duration.as_secs()
+        ))
+    } else {
+        std::future::pending().await
+    }
+}
+
+async fn recv_from_with_timeout(
+    socket: &UdpSocket,
+    buf: &mut [u8],
+    read_timeout: Option<std::time::Duration>,
+) -> anyhow::Result<(usize, SocketAddr)> {
+    if let Some(timeout_duration) = read_timeout {
+        match tokio::time::timeout(timeout_duration, socket.recv_from(buf)).await {
+            Ok(result) => Ok(result?),
+            Err(_) => Err(anyhow::anyhow!(
+                "UDP receive timed out after {}s",
+                timeout_duration.as_secs()
+            )),
+        }
+    } else {
+        Ok(socket.recv_from(buf).await?)
     }
 }
 

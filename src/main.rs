@@ -33,13 +33,15 @@ async fn main() -> anyhow::Result<()> {
     } else {
         core::AddressFamily::Any
     };
+    let connect_timeout = args.timeout.unwrap_or(5);
+    let read_timeout = args.timeout.map(std::time::Duration::from_secs);
 
     if args.scan {
         if let Some(target) = args.target {
             core::run_port_scan(
                 target,
                 all_ports,
-                args.timeout,
+                connect_timeout,
                 args.verbose,
                 family,
                 args.source_addr,
@@ -70,6 +72,7 @@ async fn main() -> anyhow::Result<()> {
             args.source_addr,
             args.source_port,
             args.numeric,
+            read_timeout,
         )
         .await?;
     } else if args.listen {
@@ -89,9 +92,25 @@ async fn main() -> anyhow::Result<()> {
                     "[*]".blue()
                 );
             }
-            core::run_server_persistent(port, args.verbose, args.tls, family, args.crlf).await?;
+            core::run_server_persistent(
+                port,
+                args.verbose,
+                args.tls,
+                family,
+                args.crlf,
+                read_timeout,
+            )
+            .await?;
         } else {
-            core::run_server(port, args.verbose, args.tls, family, args.crlf).await?;
+            core::run_server(
+                port,
+                args.verbose,
+                args.tls,
+                family,
+                args.crlf,
+                read_timeout,
+            )
+            .await?;
         }
     } else if let (Some(target), Some(&port)) = (args.target, all_ports.first()) {
         core::run_client(
@@ -99,12 +118,13 @@ async fn main() -> anyhow::Result<()> {
             port,
             args.verbose,
             args.tls,
-            args.timeout,
+            connect_timeout,
             family,
             args.crlf,
             args.source_addr,
             args.source_port,
             args.numeric,
+            read_timeout,
         )
         .await?;
     } else {

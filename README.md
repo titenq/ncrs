@@ -134,10 +134,16 @@ Use `-z` to test whether ports are open without entering interactive I/O mode.
 ### Timeout
 
 ```bash
-ncrs 8.8.8.8 80 -w 10
+ncrs 8.8.8.8 80 -w 5 -v
 ```
 
-Use `-w` to limit DNS resolution and TCP connection wait time.
+Use `-w` to limit DNS resolution, TCP connection wait time, and idle waits for final TCP/UDP reads.
+
+For a quick UDP receive-timeout check:
+
+```bash
+ncrs 127.0.0.1 9999 -u -w 2 -v
+```
 
 ### Numeric-Only Mode
 

@@ -36,8 +36,8 @@ pub struct Args {
     pub tls: bool,
 
     /// [Flag: -w] Connection timeout: maximum seconds to wait for a response
-    #[arg(short = 'w', long, default_value = "5")]
-    pub timeout: u64,
+    #[arg(short = 'w', long, value_name = "TIMEOUT")]
+    pub timeout: Option<u64>,
 
     /// [Flag: -u] UDP mode: uses UDP instead of the default TCP
     #[arg(short = 'u', long)]

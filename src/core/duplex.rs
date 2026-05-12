@@ -5,6 +5,28 @@ pub(crate) async fn handle_duplex<S>(stream: S, crlf: bool) -> anyhow::Result<()
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
+    handle_duplex_inner(stream, crlf, None).await
+}
+
+pub(crate) async fn handle_duplex_with_timeout<S>(
+    stream: S,
+    crlf: bool,
+    timeout_duration: std::time::Duration,
+) -> anyhow::Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    handle_duplex_inner(stream, crlf, Some(timeout_duration)).await
+}
+
+async fn handle_duplex_inner<S>(
+    stream: S,
+    crlf: bool,
+    read_timeout: Option<std::time::Duration>,
+) -> anyhow::Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
     let (mut reader, mut writer) = io::split(stream);
 
     let stdin_to_socket = tokio::spawn(async move {
@@ -33,7 +55,11 @@ where
 
     let socket_to_stdout = tokio::spawn(async move {
         let mut stdout = io::stdout();
-        io::copy(&mut reader, &mut stdout).await
+        if let Some(timeout_duration) = read_timeout {
+            copy_with_idle_timeout(&mut reader, &mut stdout, timeout_duration).await
+        } else {
+            io::copy(&mut reader, &mut stdout).await
+        }
     });
 
     tokio::pin!(stdin_to_socket);
@@ -53,9 +79,40 @@ where
     Ok(())
 }
 
+async fn copy_with_idle_timeout<R, W>(
+    reader: &mut R,
+    writer: &mut W,
+    timeout_duration: std::time::Duration,
+) -> std::io::Result<u64>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    let mut buf = [0u8; 8192];
+    let mut copied = 0;
+
+    loop {
+        let n = match tokio::time::timeout(timeout_duration, reader.read(&mut buf)).await {
+            Ok(result) => result?,
+            Err(_) => break,
+        };
+
+        if n == 0 {
+            break;
+        }
+
+        writer.write_all(&buf[..n]).await?;
+        copied += n as u64;
+    }
+
+    writer.flush().await?;
+    Ok(copied)
+}
+
 pub(crate) async fn handle_duplex_with_input<S>(
     stream: S,
     mut input_rx: broadcast::Receiver<Vec<u8>>,
+    read_timeout: Option<std::time::Duration>,
 ) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -72,6 +129,15 @@ where
         tokio::select! {
             res = &mut socket_to_stdout => {
                 res??;
+                return Ok(());
+            },
+            _ = async {
+                if let Some(timeout_duration) = read_timeout {
+                    tokio::time::sleep(timeout_duration).await;
+                } else {
+                    std::future::pending::<()>().await;
+                }
+            } => {
                 return Ok(());
             },
             input = input_rx.recv() => {
