@@ -21,6 +21,11 @@ async fn main() -> anyhow::Result<()> {
         all_ports.extend(common::parse_port_range(p_arg));
     }
 
+    let target_as_port = args
+        .target
+        .as_deref()
+        .and_then(|target| target.parse::<u16>().ok());
+
     let family = if args.ipv4 {
         core::AddressFamily::Ipv4
     } else if args.ipv6 {
@@ -38,17 +43,42 @@ async fn main() -> anyhow::Result<()> {
                 args.verbose,
                 family,
                 args.source_addr,
-                args.p_port,
+                args.source_port,
             )
             .await?;
         }
     } else if args.udp {
-        let port = args
-            .p_port
-            .unwrap_or_else(|| all_ports.first().copied().unwrap_or(4444));
-        core::run_udp_node(args.target, port, args.listen, args.verbose, family).await?;
+        let port = if args.listen {
+            match all_ports.first().copied().or(target_as_port) {
+                Some(port) => port,
+                None => {
+                    return Err(anyhow::anyhow!(
+                        "Listen mode requires a positional port; -p is the source port for outbound connections"
+                    ));
+                }
+            }
+        } else {
+            all_ports.first().copied().unwrap_or(4444)
+        };
+        core::run_udp_node(
+            args.target,
+            port,
+            args.listen,
+            args.verbose,
+            family,
+            args.source_addr,
+            args.source_port,
+        )
+        .await?;
     } else if args.listen {
-        let port = args.p_port.unwrap_or(4444);
+        let port = match all_ports.first().copied().or(target_as_port) {
+            Some(port) => port,
+            None => {
+                return Err(anyhow::anyhow!(
+                    "Listen mode requires a positional port; -p is the source port for outbound connections"
+                ));
+            }
+        };
 
         if args.keep_alive {
             if args.verbose {
@@ -81,12 +111,12 @@ async fn main() -> anyhow::Result<()> {
             family,
             args.crlf,
             args.source_addr,
-            args.p_port,
+            args.source_port,
         )
         .await?;
     } else {
         println!(
-            "{} Error: Usage ncrs [target] [port] or ncrs -l -p [port]",
+            "{} Error: Usage ncrs [target] [port] or ncrs -l [port]",
             "[!]".red()
         );
     }

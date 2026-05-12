@@ -18,22 +18,38 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 - CRLF conversion with `-C`.
 - Persistent listen mode with `-k`.
 - Local source address selection with `-s`.
+- Local source port selection with `-p`.
 - Optional TLS mode with `--tls`.
 
 ## Compatibility Notes
 
 `ncrs` is currently compatible with only a subset of OpenBSD `nc`.
 
-Implemented flags:
+Implemented interface:
 
 ```text
--4 -6 -C -k -l -p -s -u -v -w -z
+Arguments:
+  [destination]  Target IP address or Hostname
+  [port]...      Port(s) to connect to (e.g., 80, 80 443 8080, or 20-100)
+
+Options:
+  -l, --listen                   Listen mode: waits for incoming connections
+  -v, --verbose                  Verbose mode: prints detailed connection info
+  -z, --scan                     Zero-I/O mode: used for port scanning
+  -p, --source-port <PORT>       Local source port for outbound connections
+  -s, --sourceaddr <SOURCEADDR>  Local source address for outbound connections
+      --tls                      ncrs extension: use TLS for the connection
+  -w, --timeout <TIMEOUT>        Connection timeout in seconds
+  -u, --udp                      UDP mode
+  -4, --ipv4                     Force IPv4
+  -6, --ipv6                     Force IPv6
+  -C, --crlf                     Send CRLF as line-ending
+  -k, --keep-alive               Keep accepting sequential inbound connections
 ```
 
 Important differences from OpenBSD `nc`:
 
 - `--tls` is an `ncrs` extension and is not an OpenBSD `nc` flag.
-- In OpenBSD `nc`, `-p` is the local source port for outbound connections. In `ncrs`, `-p` still also acts as the listen port when `-l` is used.
 - `ncrs -k` accepts multiple sequential inbound connections, but it currently handles one active TCP connection at a time.
 - OpenBSD options such as `-b`, `-D`, `-d`, `-F`, `-h`, `-I`, `-i`, `-M`, `-m`, `-N`, `-n`, `-O`, `-P`, `-q`, `-r`, `-S`, `-T`, `-t`, `-U`, `-V`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
 
@@ -63,7 +79,7 @@ sudo cp target/release/ncrs /usr/local/bin/
 Terminal 1 (server):
 
 ```bash
-ncrs -l -p 8080 -v
+ncrs -l 8080 -v
 ```
 
 Terminal 2 (client):
@@ -79,7 +95,7 @@ Use TCP mode for a basic bidirectional connection between two terminals.
 Terminal 1 (server):
 
 ```bash
-ncrs -l -p 8080 -k -v
+ncrs -l 8080 -k -v
 ```
 
 Terminal 2 (client):
@@ -95,7 +111,7 @@ Stop Terminal 2 and run it again. With `-k`, Terminal 1 keeps accepting sequenti
 Terminal 1 (server):
 
 ```bash
-ncrs -l -p 8080 -u -v
+ncrs -l 8080 -u -v
 ```
 
 Terminal 2 (client):
@@ -127,7 +143,7 @@ Use `-w` to limit DNS resolution and TCP connection wait time.
 Terminal 1 (server):
 
 ```bash
-ncrs -l -p 8080 -4 -v
+ncrs -l 8080 -4 -v
 ```
 
 Terminal 2 (client):
@@ -137,6 +153,22 @@ ncrs 127.0.0.1 8080 -s 127.0.0.1 -4 -v
 ```
 
 Use `-s` to choose the local address used for outbound connections. This is useful on hosts with multiple local IP addresses or when testing routing and firewall rules.
+
+### Source Port
+
+Terminal 1 (server):
+
+```bash
+ncrs -l 8080 -4 -v
+```
+
+Terminal 2 (client):
+
+```bash
+ncrs 127.0.0.1 8080 -p 19001 -4 -v
+```
+
+Use `-p` to choose the local source port used for outbound connections.
 
 ### IPv4
 
@@ -190,7 +222,7 @@ openssl req -new -x509 -newkey rsa:2048 -nodes \
 Terminal 1 (server):
 
 ```bash
-ncrs -l -p 8443 -v --tls
+ncrs -l 8443 -v --tls
 ```
 
 Terminal 2 (client):

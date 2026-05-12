@@ -7,7 +7,7 @@ pub struct Args {
     #[arg(value_name = "destination")]
     pub target: Option<String>,
 
-    /// Port(s) to connect to (e.g., 80 or 20-100)
+    /// Port(s) to connect to (e.g., 80, 80 443 8080, or 20-100)
     #[arg(value_name = "port")]
     pub ports: Vec<String>,
 
@@ -23,9 +23,9 @@ pub struct Args {
     #[arg(short = 'z', long)]
     pub scan: bool,
 
-    /// [Flag: -p] Local source port for outbound connections; listen port with -l
-    #[arg(short = 'p', long)]
-    pub p_port: Option<u16>,
+    /// [Flag: -p] Local source port for outbound connections
+    #[arg(short = 'p', long = "source-port", value_name = "PORT")]
+    pub source_port: Option<u16>,
 
     /// [Flag: -s] Local source address for outbound connections
     #[arg(short = 's', long = "sourceaddr", value_name = "SOURCEADDR")]

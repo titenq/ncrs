@@ -1,5 +1,6 @@
 use crate::core::address::{AddressFamily, format_endpoint};
 use colored::*;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 use tokio::net::UdpSocket;
@@ -10,13 +11,10 @@ pub async fn run_udp_node(
     listen: bool,
     verbose: bool,
     family: AddressFamily,
+    source_addr: Option<String>,
+    source_port: Option<u16>,
 ) -> anyhow::Result<()> {
-    let addr = match (listen, family) {
-        (true, AddressFamily::Ipv6) => format!("[::]:{}", port),
-        (true, AddressFamily::Any | AddressFamily::Ipv4) => format!("0.0.0.0:{}", port),
-        (false, AddressFamily::Ipv6) => "[::]:0".to_string(),
-        (false, AddressFamily::Any | AddressFamily::Ipv4) => "0.0.0.0:0".to_string(),
-    };
+    let addr = udp_bind_addr(listen, port, family, source_addr.as_deref(), source_port)?;
 
     let socket = UdpSocket::bind(&addr).await?;
     let r_socket = Arc::new(socket);
@@ -91,4 +89,41 @@ pub async fn run_udp_node(
             } => res,
         }
     }
+}
+
+fn udp_bind_addr(
+    listen: bool,
+    port: u16,
+    family: AddressFamily,
+    source_addr: Option<&str>,
+    source_port: Option<u16>,
+) -> anyhow::Result<SocketAddr> {
+    if listen {
+        return Ok(match family {
+            AddressFamily::Any | AddressFamily::Ipv4 => {
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port)
+            }
+            AddressFamily::Ipv6 => SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port),
+        });
+    }
+
+    let ip = match source_addr {
+        Some(addr) => addr.parse::<IpAddr>()?,
+        None if matches!(family, AddressFamily::Ipv6) => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
+        None => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+    };
+
+    if matches!(family, AddressFamily::Ipv4) && !ip.is_ipv4() {
+        return Err(anyhow::anyhow!(
+            "Source address family does not match requested IPv4 mode"
+        ));
+    }
+
+    if matches!(family, AddressFamily::Ipv6) && !ip.is_ipv6() {
+        return Err(anyhow::anyhow!(
+            "Source address family does not match requested IPv6 mode"
+        ));
+    }
+
+    Ok(SocketAddr::new(ip, source_port.unwrap_or(0)))
 }
