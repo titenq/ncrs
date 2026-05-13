@@ -127,6 +127,22 @@ pub struct Args {
     #[arg(short = 'P', long = "proxy-username", value_name = "USERNAME")]
     pub proxy_username: Option<String>,
 
+    /// [Flag: -F] Pass the first connected socket using sendmsg(2) to stdout and exit
+    #[arg(short = 'F', long = "pass-fd")]
+    pub pass_fd: bool,
+
+    /// [Flag: -m] Ask the kernel to drop incoming packets whose TTL/hop limit is under minttl
+    #[arg(short = 'm', long = "minttl", value_name = "TTL")]
+    pub minttl: Option<u32>,
+
+    /// [Flag: -S] Enable the RFC 2385 TCP MD5 signature option
+    #[arg(short = 'S', long = "tcp-md5sig")]
+    pub tcp_md5sig: bool,
+
+    /// [Flag: -Z] DCCP mode
+    #[arg(short = 'Z', long = "dccp")]
+    pub dccp: bool,
+
     /// [ncrs extension] Use TLS for the connection
     #[arg(long = "tls")]
     pub tls: bool,

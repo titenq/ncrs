@@ -66,6 +66,10 @@ Options:
   -t, --telnet                   Answer RFC 854 DON'T and WON'T to RFC 854 DO and WILL requests
   -M, --ttl <TTL>                Set the TTL / hop limit of outgoing packets
   -T, --tos <KEYWORD>            Change IPv4 TOS or IPv6 traffic class value
+  -m, --minttl <TTL>             Ask the kernel to drop incoming packets whose TTL/hop limit is under minttl
+  -S, --tcp-md5sig               Enable the RFC 2385 TCP MD5 signature option
+  -Z, --dccp                     DCCP mode (currently a stub returning an unsupported error)
+  -F, --pass-fd                  Pass the first connected socket using sendmsg(2) to stdout and exit
   -C, --crlf                     Send CRLF as line-ending
   -d, --no-stdin                 Do not attempt to read from stdin
   -I, --recv-bytes <BYTES>       Specify the size of the TCP receive buffer in bytes
@@ -89,7 +93,6 @@ Important differences from OpenBSD `nc`:
 
 - `--tls` is an `ncrs` extension and is not an OpenBSD `nc` flag.
 - `--tls-gen` and `--tls-gen-force` are `ncrs` extensions and are not OpenBSD `nc` flags.
-- OpenBSD options such as `-F`, `-m`, `-S`, and `-Z` are not implemented yet.
 
 ## Requirements
 
@@ -498,7 +501,7 @@ Use `-T <keyword>` to change the IPv4 TOS or IPv6 Traffic Class. You can use hex
 ncrs example.com 80 -T lowdelay -v
 ```
 
-## TLS Mode
+### TLS Mode
 
 TLS is enabled with `--tls`.
 

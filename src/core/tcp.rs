@@ -25,7 +25,14 @@ pub(crate) async fn connect_tcp(
     send_bytes: Option<u32>,
     ttl: Option<u32>,
     tos: Option<u8>,
+    minttl: Option<u32>,
+    tcp_md5sig: bool,
+    dccp: bool,
 ) -> anyhow::Result<TcpStream> {
+    if dccp {
+        return Err(anyhow::anyhow!("DCCP mode (-Z) is not currently supported by tokio networking."));
+    }
+    
     let local_ip = match source_addr {
         Some(addr) => Some(addr.parse::<IpAddr>()?),
         None => None,
@@ -63,6 +70,14 @@ pub(crate) async fn connect_tcp(
 
     if let Some(t) = tos {
         let _ = crate::common::set_socket_tos(&socket, t, target_addr.is_ipv4());
+    }
+
+    if let Some(mttl) = minttl {
+        let _ = crate::common::set_socket_minttl(&socket, mttl);
+    }
+
+    if tcp_md5sig {
+        let _ = crate::common::set_socket_tcp_md5sig(&socket);
     }
 
     if local_ip.is_some() || source_port.is_some() {
@@ -118,6 +133,10 @@ pub async fn run_client(
     ttl: Option<u32>,
     tos: Option<u8>,
     telnet: bool,
+    pass_fd: bool,
+    minttl: Option<u32>,
+    tcp_md5sig: bool,
+    dccp: bool,
 ) -> anyhow::Result<()> {
     let addr = format_endpoint(&target, port);
 
@@ -167,6 +186,9 @@ pub async fn run_client(
             send_bytes,
             ttl,
             tos,
+            minttl,
+            tcp_md5sig,
+            dccp,
         )
         .await?
     };
@@ -192,6 +214,10 @@ pub async fn run_client(
         let connector = TlsConnector::from(Arc::new(config));
         let domain = ServerName::try_from(target.as_str())?.to_owned();
         let tls_stream = connector.connect(domain, stream).await?;
+
+        if pass_fd {
+            crate::common::pass_fd_and_exit(&tls_stream)?;
+        }
 
         print_connected(verbose, crlf);
 
@@ -222,6 +248,10 @@ pub async fn run_client(
             .await
         }
     } else {
+        if pass_fd {
+            crate::common::pass_fd_and_exit(&stream)?;
+        }
+
         print_connected(verbose, crlf);
         if let Some(timeout_duration) = read_timeout {
             handle_duplex_with_timeout(
@@ -270,8 +300,12 @@ pub async fn run_server(
     ttl: Option<u32>,
     tos: Option<u8>,
     telnet: bool,
+    pass_fd: bool,
+    minttl: Option<u32>,
+    tcp_md5sig: bool,
+    dccp: bool,
 ) -> anyhow::Result<()> {
-    let listener = bind_listener(port, family, debug, recv_bytes, send_bytes, ttl, tos).await?;
+    let listener = bind_listener(port, family, debug, recv_bytes, send_bytes, ttl, tos, minttl, tcp_md5sig, dccp).await?;
     let (stream, remote_addr) = listener.accept().await?;
 
     handle_server_stream(
@@ -287,6 +321,7 @@ pub async fn run_server(
         interval,
         recv_limit,
         telnet,
+        pass_fd,
     )
     .await
 }
@@ -309,8 +344,12 @@ pub async fn run_server_persistent(
     ttl: Option<u32>,
     tos: Option<u8>,
     telnet: bool,
+    pass_fd: bool,
+    minttl: Option<u32>,
+    tcp_md5sig: bool,
+    dccp: bool,
 ) -> anyhow::Result<()> {
-    let listener = bind_listener(port, family, debug, recv_bytes, send_bytes, ttl, tos).await?;
+    let listener = bind_listener(port, family, debug, recv_bytes, send_bytes, ttl, tos, minttl, tcp_md5sig, dccp).await?;
     let (input_tx, _) = broadcast::channel(16);
     if !no_stdin {
         spawn_stdin_forwarder(input_tx.clone(), crlf);
@@ -332,6 +371,7 @@ pub async fn run_server_persistent(
             interval,
             recv_limit,
             telnet,
+            pass_fd,
         )
         .await
         {
@@ -350,7 +390,13 @@ async fn bind_listener(
     send_bytes: Option<u32>,
     ttl: Option<u32>,
     tos: Option<u8>,
+    minttl: Option<u32>,
+    tcp_md5sig: bool,
+    dccp: bool,
 ) -> anyhow::Result<TcpListener> {
+    if dccp {
+        return Err(anyhow::anyhow!("DCCP mode (-Z) is not currently supported by tokio networking."));
+    }
     let addr = match family {
         AddressFamily::Any | AddressFamily::Ipv4 => format!("0.0.0.0:{}", port),
         AddressFamily::Ipv6 => format!("[::]:{}", port),
@@ -384,6 +430,14 @@ async fn bind_listener(
         let _ = crate::common::set_socket_tos(&socket, t, is_ipv4);
     }
 
+    if let Some(mttl) = minttl {
+        let _ = crate::common::set_socket_minttl(&socket, mttl);
+    }
+
+    if tcp_md5sig {
+        let _ = crate::common::set_socket_tcp_md5sig(&socket);
+    }
+
     socket.set_reuseaddr(true)?;
 
     let local_addr = addr.parse::<SocketAddr>()?;
@@ -412,6 +466,7 @@ async fn handle_server_stream(
     interval: Option<u64>,
     recv_limit: Option<u32>,
     telnet: bool,
+    pass_fd: bool,
 ) -> anyhow::Result<()> {
     if verbose {
         eprintln!("{} Connection from {}", "[+]".green(), remote_addr);
@@ -475,6 +530,10 @@ async fn handle_server_stream(
             .await
         }
     } else {
+        if pass_fd {
+            crate::common::pass_fd_and_exit(&stream)?;
+        }
+
         if let Some(timeout_duration) = read_timeout {
             handle_duplex_with_timeout(
                 stream,
@@ -516,6 +575,7 @@ async fn handle_server_stream_with_input(
     interval: Option<u64>,
     recv_limit: Option<u32>,
     telnet: bool,
+    pass_fd: bool,
 ) -> anyhow::Result<()> {
     if verbose {
         eprintln!("{} Connection from {}", "[+]".green(), remote_addr);
@@ -552,6 +612,10 @@ async fn handle_server_stream_with_input(
             eprintln!("{} TLS Handshake successful!", "[+]".green());
         }
 
+        if pass_fd {
+            crate::common::pass_fd_and_exit(&tls_stream)?;
+        }
+
         handle_duplex_with_input(
             tls_stream,
             input_rx,
@@ -564,6 +628,10 @@ async fn handle_server_stream_with_input(
         )
         .await
     } else {
+        if pass_fd {
+            crate::common::pass_fd_and_exit(&stream)?;
+        }
+
         handle_duplex_with_input(
             stream,
             input_rx,

@@ -133,3 +133,70 @@ pub fn set_socket_tos<S>(_: &S, _: u8, _: bool) -> std::io::Result<()> {
     Ok(())
 }
 
+
+#[cfg(unix)]
+pub fn pass_fd_and_exit<S: std::os::unix::io::AsRawFd>(socket: &S) -> anyhow::Result<()> {
+    use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
+    let fd = socket.as_raw_fd();
+    let cmsg = [ControlMessage::ScmRights(&[fd])];
+    let iov = [std::io::IoSlice::new(b"x")];
+    let stdout_fd = 1;
+
+    sendmsg::<()>(stdout_fd, &iov, &cmsg, MsgFlags::empty(), None)?;
+    std::process::exit(0);
+}
+
+#[cfg(not(unix))]
+pub fn pass_fd_and_exit<S>(_: &S) -> anyhow::Result<()> {
+    Err(anyhow::anyhow!("-F is only supported on Unix systems"))
+}
+
+#[cfg(target_os = "linux")]
+pub fn set_socket_minttl<S: AsRawFd>(socket: &S, minttl: u32) -> std::io::Result<()> {
+    let fd = socket.as_raw_fd();
+    let optval: libc::c_int = minttl as libc::c_int;
+    let ret = unsafe {
+        libc::setsockopt(
+            fd,
+            libc::IPPROTO_IP,
+            21, // IP_MINTTL
+            &optval as *const _ as *const libc::c_void,
+            std::mem::size_of_val(&optval) as libc::socklen_t,
+        )
+    };
+    if ret == -1 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn set_socket_minttl<S>(_: &S, _: u32) -> std::io::Result<()> {
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+pub fn set_socket_tcp_md5sig<S: AsRawFd>(socket: &S) -> std::io::Result<()> {
+    let fd = socket.as_raw_fd();
+    let optval: libc::c_int = 1;
+    let ret = unsafe {
+        libc::setsockopt(
+            fd,
+            libc::IPPROTO_TCP,
+            14, // TCP_MD5SIG
+            &optval as *const _ as *const libc::c_void,
+            std::mem::size_of_val(&optval) as libc::socklen_t,
+        )
+    };
+    if ret == -1 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn set_socket_tcp_md5sig<S>(_: &S) -> std::io::Result<()> {
+    Ok(())
+}

@@ -234,6 +234,10 @@ async fn main() -> anyhow::Result<()> {
                 args.ttl,
                 parsed_tos,
                 args.telnet,
+                args.pass_fd,
+                args.minttl,
+                args.tcp_md5sig,
+                args.dccp,
             )
             .await?;
         } else {
@@ -255,6 +259,10 @@ async fn main() -> anyhow::Result<()> {
                 args.ttl,
                 parsed_tos,
                 args.telnet,
+                args.pass_fd,
+                args.minttl,
+                args.tcp_md5sig,
+                args.dccp,
             )
             .await?;
         }
@@ -285,6 +293,10 @@ async fn main() -> anyhow::Result<()> {
             args.ttl,
             parsed_tos,
             args.telnet,
+            args.pass_fd,
+            args.minttl,
+            args.tcp_md5sig,
+            args.dccp,
         )
         .await?;
     } else {
