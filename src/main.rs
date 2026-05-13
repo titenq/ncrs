@@ -12,8 +12,10 @@ use figlet_rs::FIGfont;
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    if let Some(figure) = FIGfont::standard().unwrap().convert("ncrs") {
-        println!("{}", figure.to_string().cyan().bold());
+    if args.verbose {
+        if let Some(figure) = FIGfont::standard().unwrap().convert("ncrs") {
+            println!("{}", figure.to_string().cyan().bold());
+        }
     }
 
     if args.tls_gen || args.tls_gen_force {
@@ -144,7 +146,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .await?;
     } else {
-        println!(
+        eprintln!(
             "{} Error: Usage ncrs [target] [port] or ncrs -l [port]",
             "[!]".red()
         );

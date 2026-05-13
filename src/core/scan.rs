@@ -40,7 +40,9 @@ pub async fn run_port_scan(
                     .await
                     .is_ok()
                 {
-                    println!("{} port {} open", "Connection to".green(), port);
+                    if verbose {
+                        println!("{} port {} open", "Connection to".green(), port);
+                    }
                 }
             }
         }));
