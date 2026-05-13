@@ -24,6 +24,10 @@ jobs:
             artifact_name: ncrs
             asset_name: ncrs-macos-amd64
             target: x86_64-apple-darwin
+          - os: macos-latest
+            artifact_name: ncrs
+            asset_name: ncrs-macos-arm64
+            target: aarch64-apple-darwin
 
     steps:
       - name: Checkout code
@@ -37,13 +41,13 @@ jobs:
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Rename and Prepare Asset (Unix)
-        if: matrix.os != 'windows-latest'
+      - name: Rename Asset
+        shell: bash
         run: mv target/${{ matrix.target }}/release/${{ matrix.artifact_name }} ${{ matrix.asset_name }}
 
-      - name: Rename and Prepare Asset (Windows)
-        if: matrix.os == 'windows-latest'
-        run: mv target/${{ matrix.target }}/release/${{ matrix.artifact_name }} ${{ matrix.asset_name }}
+      - name: Strip binary (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: strip ${{ matrix.asset_name }}
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
