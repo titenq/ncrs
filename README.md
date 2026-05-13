@@ -24,6 +24,7 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 - Disable stdin reading with `-d` for background execution.
 - Quit delay after EOF on stdin with `-q`.
 - Interval delay for throttling data and port scanning with `-i`.
+- Randomize remote ports with `-r` to obfuscate port scans.
 - Unix Domain Sockets support with `-U` (cross-platform safe, Unix-only execution).
 - Specify the size of the TCP receive and send buffers in bytes with `-I` and `-O`.
 - Allow broadcast (SO_BROADCAST) on the socket with `-b`.
@@ -66,6 +67,7 @@ Options:
   -N, --shutdown-on-eof          Shutdown the network socket after EOF on stdin
   -q, --quit-delay <SECONDS>     Quit delay: wait the specified seconds after EOF on stdin and quit
   -U, --unixsock                 Use Unix Domain Sockets
+  -r, --randomize-ports          Randomize remote ports
       --tls                      ncrs extension: use TLS for the connection
       --tls-gen                  ncrs extension: generate TLS files in ~/.config/ncrs
       --tls-gen-force            ncrs extension: generate and overwrite TLS files
@@ -75,7 +77,7 @@ Important differences from OpenBSD `nc`:
 
 - `--tls` is an `ncrs` extension and is not an OpenBSD `nc` flag.
 - `--tls-gen` and `--tls-gen-force` are `ncrs` extensions and are not OpenBSD `nc` flags.
-- OpenBSD options such as `-F`, `-M`, `-m`, `-P`, `-r`, `-S`, `-T`, `-t`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
+- OpenBSD options such as `-F`, `-M`, `-m`, `-P`, `-S`, `-T`, `-t`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
 
 ## Requirements
 
@@ -199,6 +201,12 @@ ncrs localhost 20-100 -z -v
 ```
 
 Use `-z` to test whether ports are open without entering interactive I/O mode.
+
+You can also use `-r` to randomize the order in which ports are scanned, which is helpful to evade detection or simple port scan limits:
+
+```bash
+ncrs localhost 20-100 -z -r -v
+```
 
 ### Timeout
 

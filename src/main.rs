@@ -36,6 +36,12 @@ async fn main() -> anyhow::Result<()> {
         all_ports.extend(common::parse_port_range(p_arg));
     }
 
+    if args.randomize_ports {
+        use rand::seq::SliceRandom;
+        let mut rng = rand::rng();
+        all_ports.shuffle(&mut rng);
+    }
+
     let target_as_port = args
         .target
         .as_deref()

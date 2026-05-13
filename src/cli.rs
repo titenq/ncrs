@@ -95,6 +95,10 @@ pub struct Args {
     #[arg(short = 'i', long = "interval", value_name = "SECONDS")]
     pub interval: Option<u64>,
 
+    /// [Flag: -r] Randomize remote ports
+    #[arg(short = 'r', long = "randomize-ports")]
+    pub randomize_ports: bool,
+
     /// [Flag: -I] Specify the size of the TCP receive buffer
     #[arg(short = 'I', long = "recv-bytes", value_name = "BYTES")]
     pub recv_bytes: Option<u32>,
