@@ -43,6 +43,8 @@ pub async fn connect_via_proxy(
         debug,
         None,
         None,
+        None,
+        None,
     )
     .await
     .context("Failed to connect to proxy")?;

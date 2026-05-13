@@ -30,6 +30,8 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 - Specify the size of the TCP receive and send buffers in bytes with `-I` and `-O`.
 - Allow broadcast (SO_BROADCAST) on the socket with `-b`.
 - Enable debugging (SO_DEBUG) on the socket with `-D`.
+- Set the Time To Live (TTL) of outgoing packets with `-M`.
+- Change the IPv4 Type of Service (TOS) or IPv6 Traffic Class with `-T`.
 - Verbose mode with `-v` to print detailed connection info.
 - Silent execution by default (logs directed to stderr) for safe data piping.
 - Proxy support for TCP connections via SOCKS4, SOCKS5, and HTTP CONNECT with `-x`, `-X`, and `-P`.
@@ -60,6 +62,8 @@ Options:
   -6, --ipv6                     Force IPv6
   -b, --broadcast                Allow broadcast (SO_BROADCAST) on the socket
   -D, --debug                    Enable debugging on the socket
+  -M, --ttl <TTL>                Set the TTL / hop limit of outgoing packets
+  -T, --tos <KEYWORD>            Change IPv4 TOS or IPv6 traffic class value
   -C, --crlf                     Send CRLF as line-ending
   -d, --no-stdin                 Do not attempt to read from stdin
   -I, --recv-bytes <BYTES>       Specify the size of the TCP receive buffer in bytes
@@ -75,7 +79,7 @@ Options:
   -X, --proxy-type <PROTOCOL>    Proxy protocol: "4" (SOCKSv4), "5" (SOCKSv5), or "connect" (HTTP)
   -P, --proxy-username <USER>    Proxy username for authentication (only for HTTP CONNECT proxies)
       --tls                      ncrs extension: use TLS for the connection
-      --tls-gen                  ncrs extension: generate TLS files in ~/.config/ncrs
+      --tls-gen                  ncrs extension: generate TLS files in the OS-specific data directory
       --tls-gen-force            ncrs extension: generate and overwrite TLS files
 ```
 
@@ -83,7 +87,7 @@ Important differences from OpenBSD `nc`:
 
 - `--tls` is an `ncrs` extension and is not an OpenBSD `nc` flag.
 - `--tls-gen` and `--tls-gen-force` are `ncrs` extensions and are not OpenBSD `nc` flags.
-- OpenBSD options such as `-F`, `-M`, `-m`, `-S`, `-T`, `-t`, and `-Z` are not implemented yet.
+- OpenBSD options such as `-F`, `-m`, `-S`, `-t`, and `-Z` are not implemented yet.
 
 ## Requirements
 
@@ -468,6 +472,20 @@ ncrs -x 10.2.3.4:8080 -X connect -P myusername:mypassword example.com 80 -v
 
 *Note: Proxy support is only available for outbound TCP connections. It cannot be used with listen (`-l`), UDP (`-u`), Unix sockets (`-U`), or custom source addresses (`-s`).*
 
+## Routing and Traffic Control
+
+`ncrs` exposes several low-level IP configurations for network troubleshooting:
+
+**Time To Live (-M)**: Use `-M <ttl>` to set the IP TTL (or IPv6 hop limit) of outgoing packets. Useful for testing routing and firewall limits.
+```bash
+ncrs example.com 80 -M 5 -v
+```
+
+**Type of Service (-T)**: Use `-T <keyword>` to change the IPv4 TOS or IPv6 Traffic Class. You can use hexadecimal values (e.g., `0x10`) or OpenBSD `nc` keywords like `critical`, `inetcontrol`, `lowcost`, `lowdelay`, `netcontrol`, `throughput`, or `reliability`.
+```bash
+ncrs example.com 80 -T lowdelay -v
+```
+
 ## TLS Mode
 
 TLS is enabled with `--tls`.
@@ -520,6 +538,7 @@ ncrs/
 │   │   ├── address.rs
 │   │   ├── duplex.rs
 │   │   ├── mod.rs
+│   │   ├── proxy.rs
 │   │   ├── scan.rs
 │   │   ├── tcp.rs
 │   │   ├── udp.rs

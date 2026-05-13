@@ -20,10 +20,20 @@ pub async fn run_udp_node(
     broadcast: bool,
     debug: bool,
     recv_limit: Option<u32>,
+    ttl: Option<u32>,
+    tos: Option<u8>,
 ) -> anyhow::Result<()> {
     let addr = udp_bind_addr(listen, port, family, source_addr.as_deref(), source_port)?;
 
     let socket = UdpSocket::bind(&addr).await?;
+
+    if let Some(t) = ttl {
+        let _ = crate::common::set_socket_ttl(&socket, t, addr.is_ipv4());
+    }
+
+    if let Some(t) = tos {
+        let _ = crate::common::set_socket_tos(&socket, t, addr.is_ipv4());
+    }
 
     if broadcast {
         socket.set_broadcast(true)?;

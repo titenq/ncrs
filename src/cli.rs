@@ -31,18 +31,6 @@ pub struct Args {
     #[arg(short = 's', long = "sourceaddr", value_name = "SOURCEADDR")]
     pub source_addr: Option<String>,
 
-    /// [ncrs extension] Use TLS for the connection
-    #[arg(long = "tls")]
-    pub tls: bool,
-
-    /// [ncrs extension] Generate TLS files in ~/.config/ncrs
-    #[arg(long = "tls-gen")]
-    pub tls_gen: bool,
-
-    /// [ncrs extension] Generate TLS files in ~/.config/ncrs, overwriting existing files
-    #[arg(long = "tls-gen-force")]
-    pub tls_gen_force: bool,
-
     /// [Flag: -w] Connection timeout: maximum seconds to wait for a response
     #[arg(short = 'w', long, value_name = "TIMEOUT")]
     pub timeout: Option<u64>,
@@ -115,6 +103,14 @@ pub struct Args {
     #[arg(short = 'U', long = "unixsock")]
     pub unix: bool,
 
+    /// [Flag: -M] Set the TTL / hop limit of outgoing packets
+    #[arg(short = 'M', long = "ttl", value_name = "TTL")]
+    pub ttl: Option<u32>,
+
+    /// [Flag: -T] Change IPv4 TOS or IPv6 traffic class value (keywords: critical, inetcontrol, lowcost, lowdelay, netcontrol, throughput, reliability, or hex/dec)
+    #[arg(short = 'T', long = "tos", value_name = "KEYWORD")]
+    pub tos: Option<String>,
+
     /// [Flag: -x] Proxy address and port
     #[arg(short = 'x', long = "proxy", value_name = "ADDRESS[:PORT]")]
     pub proxy: Option<String>,
@@ -126,4 +122,16 @@ pub struct Args {
     /// [Flag: -P] Proxy username for authentication (only for HTTP CONNECT proxies at present)
     #[arg(short = 'P', long = "proxy-username", value_name = "USERNAME")]
     pub proxy_username: Option<String>,
+
+    /// [ncrs extension] Use TLS for the connection
+    #[arg(long = "tls")]
+    pub tls: bool,
+
+    /// [ncrs extension] Generate TLS files in the OS-specific data directory
+    #[arg(long = "tls-gen")]
+    pub tls_gen: bool,
+
+    /// [ncrs extension] Generate TLS files in the OS-specific data directory, overwriting existing files
+    #[arg(long = "tls-gen-force")]
+    pub tls_gen_force: bool,
 }

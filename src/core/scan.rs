@@ -43,7 +43,7 @@ pub async fn run_port_scan(
         handles.push(tokio::spawn(async move {
             let timeout = std::time::Duration::from_secs(timeout_secs);
             if let Ok(addr) = resolve_address(&t, port, family, timeout, numeric).await {
-                if connect_tcp(addr, source_addr.as_deref(), source_port, timeout, debug, None, None)
+                if connect_tcp(addr, source_addr.as_deref(), source_port, timeout, debug, None, None, None, None)
                     .await
                     .is_ok()
                 {

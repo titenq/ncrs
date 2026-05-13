@@ -23,6 +23,8 @@ pub(crate) async fn connect_tcp(
     debug: bool,
     recv_bytes: Option<u32>,
     send_bytes: Option<u32>,
+    ttl: Option<u32>,
+    tos: Option<u8>,
 ) -> anyhow::Result<TcpStream> {
     let local_ip = match source_addr {
         Some(addr) => Some(addr.parse::<IpAddr>()?),
@@ -53,6 +55,14 @@ pub(crate) async fn connect_tcp(
     
     if let Some(size) = send_bytes {
         socket.set_send_buffer_size(size)?;
+    }
+
+    if let Some(t) = ttl {
+        let _ = crate::common::set_socket_ttl(&socket, t, target_addr.is_ipv4());
+    }
+
+    if let Some(t) = tos {
+        let _ = crate::common::set_socket_tos(&socket, t, target_addr.is_ipv4());
     }
 
     if local_ip.is_some() || source_port.is_some() {
@@ -105,6 +115,8 @@ pub async fn run_client(
     proxy: Option<String>,
     proxy_type: Option<String>,
     proxy_username: Option<String>,
+    ttl: Option<u32>,
+    tos: Option<u8>,
 ) -> anyhow::Result<()> {
     let addr = format_endpoint(&target, port);
 
@@ -152,6 +164,8 @@ pub async fn run_client(
             debug,
             recv_bytes,
             send_bytes,
+            ttl,
+            tos,
         )
         .await?
     };
@@ -247,8 +261,10 @@ pub async fn run_server(
     recv_bytes: Option<u32>,
     send_bytes: Option<u32>,
     recv_limit: Option<u32>,
+    ttl: Option<u32>,
+    tos: Option<u8>,
 ) -> anyhow::Result<()> {
-    let listener = bind_listener(port, family, debug, recv_bytes, send_bytes).await?;
+    let listener = bind_listener(port, family, debug, recv_bytes, send_bytes, ttl, tos).await?;
     let (stream, remote_addr) = listener.accept().await?;
 
     handle_server_stream(
@@ -282,8 +298,10 @@ pub async fn run_server_persistent(
     recv_bytes: Option<u32>,
     send_bytes: Option<u32>,
     recv_limit: Option<u32>,
+    ttl: Option<u32>,
+    tos: Option<u8>,
 ) -> anyhow::Result<()> {
-    let listener = bind_listener(port, family, debug, recv_bytes, send_bytes).await?;
+    let listener = bind_listener(port, family, debug, recv_bytes, send_bytes, ttl, tos).await?;
     let (input_tx, _) = broadcast::channel(16);
     if !no_stdin {
         spawn_stdin_forwarder(input_tx.clone(), crlf);
@@ -314,7 +332,7 @@ pub async fn run_server_persistent(
     }
 }
 
-async fn bind_listener(port: u16, family: AddressFamily, debug: bool, recv_bytes: Option<u32>, send_bytes: Option<u32>) -> anyhow::Result<TcpListener> {
+async fn bind_listener(port: u16, family: AddressFamily, debug: bool, recv_bytes: Option<u32>, send_bytes: Option<u32>, ttl: Option<u32>, tos: Option<u8>) -> anyhow::Result<TcpListener> {
     let addr = match family {
         AddressFamily::Any | AddressFamily::Ipv4 => format!("0.0.0.0:{}", port),
         AddressFamily::Ipv6 => format!("[::]:{}", port),
@@ -336,6 +354,16 @@ async fn bind_listener(port: u16, family: AddressFamily, debug: bool, recv_bytes
     
     if let Some(size) = send_bytes {
         socket.set_send_buffer_size(size)?;
+    }
+    
+    let is_ipv4 = !matches!(family, AddressFamily::Ipv6);
+    
+    if let Some(t) = ttl {
+        let _ = crate::common::set_socket_ttl(&socket, t, is_ipv4);
+    }
+
+    if let Some(t) = tos {
+        let _ = crate::common::set_socket_tos(&socket, t, is_ipv4);
     }
     
     socket.set_reuseaddr(true)?;

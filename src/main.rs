@@ -68,6 +68,18 @@ async fn main() -> anyhow::Result<()> {
     let connect_timeout = args.timeout.unwrap_or(5);
     let read_timeout = args.timeout.map(std::time::Duration::from_secs);
 
+    let parsed_tos = if let Some(tos_str) = &args.tos {
+        match common::parse_tos(tos_str) {
+            Some(t) => Some(t),
+            None => {
+                eprintln!("{} Error: Invalid TOS/Traffic Class keyword or value: {}", "[!]".red(), tos_str);
+                std::process::exit(1);
+            }
+        }
+    } else {
+        None
+    };
+
     if args.unix {
         #[cfg(unix)]
         {
@@ -183,6 +195,8 @@ async fn main() -> anyhow::Result<()> {
             args.broadcast,
             args.debug,
             args.recv_limit,
+            args.ttl,
+            parsed_tos,
         )
         .await?;
     } else if args.listen {
@@ -217,6 +231,8 @@ async fn main() -> anyhow::Result<()> {
                 args.recv_bytes,
                 args.send_bytes,
                 args.recv_limit,
+                args.ttl,
+                parsed_tos,
             )
             .await?;
         } else {
@@ -235,6 +251,8 @@ async fn main() -> anyhow::Result<()> {
                 args.recv_bytes,
                 args.send_bytes,
                 args.recv_limit,
+                args.ttl,
+                parsed_tos,
             )
             .await?;
         }
@@ -262,6 +280,8 @@ async fn main() -> anyhow::Result<()> {
             args.proxy,
             args.proxy_type,
             args.proxy_username,
+            args.ttl,
+            parsed_tos,
         )
         .await?;
     } else {
