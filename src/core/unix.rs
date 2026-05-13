@@ -16,6 +16,7 @@ pub async fn run_unix_client(
     quit_delay: Option<i32>,
     interval: Option<u64>,
     debug: bool,
+    recv_limit: Option<u32>,
 ) -> anyhow::Result<()> {
     if verbose {
         eprintln!("{} Connecting to Unix socket {}...", "[*]".yellow(), path);
@@ -46,6 +47,7 @@ pub async fn run_unix_client(
             no_stdin,
             quit_delay,
             interval,
+            recv_limit,
         )
         .await
     } else {
@@ -56,6 +58,7 @@ pub async fn run_unix_client(
             no_stdin,
             quit_delay,
             interval,
+            recv_limit,
         )
         .await
     }
@@ -71,6 +74,7 @@ pub async fn run_unix_server(
     quit_delay: Option<i32>,
     interval: Option<u64>,
     debug: bool,
+    recv_limit: Option<u32>,
 ) -> anyhow::Result<()> {
     let listener = bind_unix_listener(path, debug)?;
 
@@ -89,6 +93,7 @@ pub async fn run_unix_server(
             no_stdin,
             quit_delay,
             interval,
+            recv_limit,
         )
         .await
     } else {
@@ -99,6 +104,7 @@ pub async fn run_unix_server(
             no_stdin,
             quit_delay,
             interval,
+            recv_limit,
         )
         .await
     }
@@ -114,6 +120,7 @@ pub async fn run_unix_server_persistent(
     quit_delay: Option<i32>,
     interval: Option<u64>,
     debug: bool,
+    recv_limit: Option<u32>,
 ) -> anyhow::Result<()> {
     let listener = bind_unix_listener(path, debug)?;
     let (input_tx, _) = broadcast::channel(16);
@@ -137,6 +144,7 @@ pub async fn run_unix_server_persistent(
             shutdown_on_eof,
             quit_delay,
             interval,
+            recv_limit,
         )
         .await
         {

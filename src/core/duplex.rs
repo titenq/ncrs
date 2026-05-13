@@ -8,6 +8,7 @@ pub(crate) async fn handle_duplex<S>(
     no_stdin: bool,
     quit_delay: Option<i32>,
     interval: Option<u64>,
+    recv_limit: Option<u32>,
 ) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -20,6 +21,7 @@ where
         no_stdin,
         quit_delay,
         interval,
+        recv_limit,
     )
     .await
 }
@@ -32,6 +34,7 @@ pub(crate) async fn handle_duplex_with_timeout<S>(
     no_stdin: bool,
     quit_delay: Option<i32>,
     interval: Option<u64>,
+    recv_limit: Option<u32>,
 ) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -44,6 +47,7 @@ where
         no_stdin,
         quit_delay,
         interval,
+        recv_limit,
     )
     .await
 }
@@ -56,6 +60,7 @@ async fn handle_duplex_inner<S>(
     no_stdin: bool,
     quit_delay: Option<i32>,
     interval: Option<u64>,
+    recv_limit: Option<u32>,
 ) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -108,13 +113,16 @@ where
     let socket_to_stdout = tokio::spawn(async move {
         let mut stdout = io::stdout();
         if let Some(timeout_duration) = read_timeout {
-            copy_with_idle_timeout(&mut reader, &mut stdout, timeout_duration, interval).await
+            copy_with_idle_timeout(&mut reader, &mut stdout, timeout_duration, interval, recv_limit).await
         } else {
-            if let Some(delay) = interval {
+            if interval.is_some() || recv_limit.is_some() {
                 let mut buf = [0u8; 8192];
                 let mut copied = 0;
+                let mut reads = 0;
                 loop {
-                    tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+                    if let Some(delay) = interval {
+                        tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+                    }
                     let n = reader.read(&mut buf).await?;
                     if n == 0 {
                         break;
@@ -122,6 +130,12 @@ where
                     stdout.write_all(&buf[..n]).await?;
                     stdout.flush().await?;
                     copied += n as u64;
+                    reads += 1;
+                    if let Some(limit) = recv_limit {
+                        if reads >= limit {
+                            break;
+                        }
+                    }
                 }
                 Ok(copied)
             } else {
@@ -156,6 +170,7 @@ async fn copy_with_idle_timeout<R, W>(
     writer: &mut W,
     timeout_duration: std::time::Duration,
     interval: Option<u64>,
+    recv_limit: Option<u32>,
 ) -> std::io::Result<u64>
 where
     R: AsyncRead + Unpin,
@@ -163,6 +178,7 @@ where
 {
     let mut buf = [0u8; 8192];
     let mut copied = 0;
+    let mut reads = 0;
 
     loop {
         if let Some(delay) = interval {
@@ -179,6 +195,12 @@ where
 
         writer.write_all(&buf[..n]).await?;
         copied += n as u64;
+        reads += 1;
+        if let Some(limit) = recv_limit {
+            if reads >= limit {
+                break;
+            }
+        }
     }
 
     writer.flush().await?;
@@ -192,6 +214,7 @@ pub(crate) async fn handle_duplex_with_input<S>(
     shutdown_on_eof: bool,
     quit_delay: Option<i32>,
     interval: Option<u64>,
+    recv_limit: Option<u32>,
 ) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -199,11 +222,14 @@ where
     let (mut reader, mut writer) = io::split(stream);
     let socket_to_stdout = tokio::spawn(async move {
         let mut stdout = io::stdout();
-        if let Some(delay) = interval {
+        if interval.is_some() || recv_limit.is_some() {
             let mut buf = [0u8; 8192];
             let mut copied = 0;
+            let mut reads = 0;
             loop {
-                tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+                if let Some(delay) = interval {
+                    tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+                }
                 let n = reader.read(&mut buf).await?;
                 if n == 0 {
                     break;
@@ -211,6 +237,12 @@ where
                 stdout.write_all(&buf[..n]).await?;
                 stdout.flush().await?;
                 copied += n as u64;
+                reads += 1;
+                if let Some(limit) = recv_limit {
+                    if reads >= limit {
+                        break;
+                    }
+                }
             }
             Ok(copied)
         } else {

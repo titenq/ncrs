@@ -23,6 +23,7 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 - Shutdown the network socket after EOF on stdin with `-N`.
 - Disable stdin reading with `-d` for background execution.
 - Quit delay after EOF on stdin with `-q`.
+- Receive limit with `-W` to terminate after exactly X packets/chunks of data.
 - Interval delay for throttling data and port scanning with `-i`.
 - Randomize remote ports with `-r` to obfuscate port scans.
 - Unix Domain Sockets support with `-U` (cross-platform safe, Unix-only execution).
@@ -66,6 +67,7 @@ Options:
   -k, --keep-alive               Keep accepting sequential inbound connections
   -N, --shutdown-on-eof          Shutdown the network socket after EOF on stdin
   -q, --quit-delay <SECONDS>     Quit delay: wait the specified seconds after EOF on stdin and quit
+  -W, --recv-limit <LIMIT>       Receive limit: Terminate after receiving the specified number of packets/chunks
   -U, --unixsock                 Use Unix Domain Sockets
   -r, --randomize-ports          Randomize remote ports
       --tls                      ncrs extension: use TLS for the connection
@@ -77,7 +79,7 @@ Important differences from OpenBSD `nc`:
 
 - `--tls` is an `ncrs` extension and is not an OpenBSD `nc` flag.
 - `--tls-gen` and `--tls-gen-force` are `ncrs` extensions and are not OpenBSD `nc` flags.
-- OpenBSD options such as `-F`, `-M`, `-m`, `-P`, `-S`, `-T`, `-t`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
+- OpenBSD options such as `-F`, `-M`, `-m`, `-P`, `-S`, `-T`, `-t`, `-X`, `-x`, and `-Z` are not implemented yet.
 
 ## Requirements
 
@@ -379,6 +381,18 @@ echo "Process this data" | ncrs localhost 8080 -q 5
 Because the server (Terminal 1) is keeping the connection open, the client (Terminal 2) will send the message, detect the end of the `echo` text, **wait exactly 5 seconds**, and then gracefully exit. 
 
 *Note: If the server finishes sending its response and closes the connection **before** the 5 seconds are up, `ncrs` exits immediately. You can use `-q 0` to exit instantly (aborting everything) or `-q -1` to wait forever.*
+
+### Receive Limit (-W)
+
+Use `-W <LIMIT>` to automatically terminate the connection after receiving exactly `LIMIT` network reads (packets for UDP, chunks of data for TCP).
+
+To wait for exactly 1 UDP reply from an NTP server and exit immediately:
+
+```bash
+echo -n -e '\x1b\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00' | ncrs 162.159.200.1 123 -u -W 1 -v
+```
+
+This is extremely useful in bash scripts where you don't want to deal with manual timeouts, knowing you just need exactly one response.
 
 ### Interval Delay (-i)
 

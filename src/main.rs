@@ -54,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
     } else {
         core::AddressFamily::Any
     };
-    
+
     let connect_timeout = args.timeout.unwrap_or(5);
     let read_timeout = args.timeout.map(std::time::Duration::from_secs);
 
@@ -64,7 +64,10 @@ async fn main() -> anyhow::Result<()> {
             let target = match args.target {
                 Some(ref t) => t.clone(),
                 None => {
-                    eprintln!("{} Error: Target path is required for Unix Sockets.", "[!]".red());
+                    eprintln!(
+                        "{} Error: Target path is required for Unix Sockets.",
+                        "[!]".red()
+                    );
                     std::process::exit(1);
                 }
             };
@@ -81,6 +84,7 @@ async fn main() -> anyhow::Result<()> {
                         args.quit_delay,
                         args.interval,
                         args.debug,
+                        args.recv_limit,
                     )
                     .await?;
                 } else {
@@ -94,6 +98,7 @@ async fn main() -> anyhow::Result<()> {
                         args.quit_delay,
                         args.interval,
                         args.debug,
+                        args.recv_limit,
                     )
                     .await?;
                 }
@@ -108,9 +113,11 @@ async fn main() -> anyhow::Result<()> {
                     args.quit_delay,
                     args.interval,
                     args.debug,
+                    args.recv_limit,
                 )
                 .await?;
             }
+
             return Ok(());
         }
 
@@ -165,6 +172,7 @@ async fn main() -> anyhow::Result<()> {
             read_timeout,
             args.broadcast,
             args.debug,
+            args.recv_limit,
         )
         .await?;
     } else if args.listen {
@@ -198,6 +206,7 @@ async fn main() -> anyhow::Result<()> {
                 args.debug,
                 args.recv_bytes,
                 args.send_bytes,
+                args.recv_limit,
             )
             .await?;
         } else {
@@ -215,6 +224,7 @@ async fn main() -> anyhow::Result<()> {
                 args.debug,
                 args.recv_bytes,
                 args.send_bytes,
+                args.recv_limit,
             )
             .await?;
         }
@@ -238,6 +248,7 @@ async fn main() -> anyhow::Result<()> {
             args.debug,
             args.recv_bytes,
             args.send_bytes,
+            args.recv_limit,
         )
         .await?;
     } else {

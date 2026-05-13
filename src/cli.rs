@@ -107,6 +107,10 @@ pub struct Args {
     #[arg(short = 'O', long = "send-bytes", value_name = "BYTES")]
     pub send_bytes: Option<u32>,
 
+    /// [Flag: -W] Receive limit: Terminate after receiving the specified number of packets/chunks
+    #[arg(short = 'W', long = "recv-limit", value_name = "LIMIT")]
+    pub recv_limit: Option<u32>,
+
     /// [Flag: -U] Use Unix Domain Sockets
     #[arg(short = 'U', long = "unixsock")]
     pub unix: bool,

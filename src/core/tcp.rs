@@ -101,6 +101,7 @@ pub async fn run_client(
     debug: bool,
     recv_bytes: Option<u32>,
     send_bytes: Option<u32>,
+    recv_limit: Option<u32>,
 ) -> anyhow::Result<()> {
     let addr = format_endpoint(&target, port);
 
@@ -169,6 +170,7 @@ pub async fn run_client(
                 no_stdin,
                 quit_delay,
                 interval,
+                recv_limit,
             )
             .await
         } else {
@@ -179,6 +181,7 @@ pub async fn run_client(
                 no_stdin,
                 quit_delay,
                 interval,
+                recv_limit,
             )
             .await
         }
@@ -193,6 +196,7 @@ pub async fn run_client(
                 no_stdin,
                 quit_delay,
                 interval,
+                recv_limit,
             )
             .await
         } else {
@@ -203,6 +207,7 @@ pub async fn run_client(
                 no_stdin,
                 quit_delay,
                 interval,
+                recv_limit,
             )
             .await
         }
@@ -223,6 +228,7 @@ pub async fn run_server(
     debug: bool,
     recv_bytes: Option<u32>,
     send_bytes: Option<u32>,
+    recv_limit: Option<u32>,
 ) -> anyhow::Result<()> {
     let listener = bind_listener(port, family, debug, recv_bytes, send_bytes).await?;
     let (stream, remote_addr) = listener.accept().await?;
@@ -238,6 +244,7 @@ pub async fn run_server(
         no_stdin,
         quit_delay,
         interval,
+        recv_limit,
     )
     .await
 }
@@ -256,6 +263,7 @@ pub async fn run_server_persistent(
     debug: bool,
     recv_bytes: Option<u32>,
     send_bytes: Option<u32>,
+    recv_limit: Option<u32>,
 ) -> anyhow::Result<()> {
     let listener = bind_listener(port, family, debug, recv_bytes, send_bytes).await?;
     let (input_tx, _) = broadcast::channel(16);
@@ -277,6 +285,7 @@ pub async fn run_server_persistent(
             shutdown_on_eof,
             quit_delay,
             interval,
+            recv_limit,
         )
         .await
         {
@@ -337,6 +346,7 @@ async fn handle_server_stream(
     no_stdin: bool,
     quit_delay: Option<i32>,
     interval: Option<u64>,
+    recv_limit: Option<u32>,
 ) -> anyhow::Result<()> {
     if verbose {
         eprintln!("{} Connection from {}", "[+]".green(), remote_addr);
@@ -382,6 +392,7 @@ async fn handle_server_stream(
                 no_stdin,
                 quit_delay,
                 interval,
+                recv_limit,
             )
             .await
         } else {
@@ -392,6 +403,7 @@ async fn handle_server_stream(
                 no_stdin,
                 quit_delay,
                 interval,
+                recv_limit,
             )
             .await
         }
@@ -405,6 +417,7 @@ async fn handle_server_stream(
                 no_stdin,
                 quit_delay,
                 interval,
+                recv_limit,
             )
             .await
         } else {
@@ -415,6 +428,7 @@ async fn handle_server_stream(
                 no_stdin,
                 quit_delay,
                 interval,
+                recv_limit,
             )
             .await
         }
@@ -431,6 +445,7 @@ async fn handle_server_stream_with_input(
     shutdown_on_eof: bool,
     quit_delay: Option<i32>,
     interval: Option<u64>,
+    recv_limit: Option<u32>,
 ) -> anyhow::Result<()> {
     if verbose {
         eprintln!("{} Connection from {}", "[+]".green(), remote_addr);
@@ -474,6 +489,7 @@ async fn handle_server_stream_with_input(
             shutdown_on_eof,
             quit_delay,
             interval,
+            recv_limit,
         )
         .await
     } else {
@@ -484,6 +500,7 @@ async fn handle_server_stream_with_input(
             shutdown_on_eof,
             quit_delay,
             interval,
+            recv_limit,
         )
         .await
     }

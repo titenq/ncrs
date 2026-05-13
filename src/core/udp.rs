@@ -19,6 +19,7 @@ pub async fn run_udp_node(
     read_timeout: Option<std::time::Duration>,
     broadcast: bool,
     debug: bool,
+    recv_limit: Option<u32>,
 ) -> anyhow::Result<()> {
     let addr = udp_bind_addr(listen, port, family, source_addr.as_deref(), source_port)?;
 
@@ -69,11 +70,24 @@ pub async fn run_udp_node(
             } => res,
             res = async {
                 let mut recv_buf = [0u8; 65535];
+                let mut reads = 1; // Since we already read one packet before the loop on line 52
+
+                if let Some(limit) = recv_limit {
+                    if reads >= limit {
+                        return anyhow::Ok(());
+                    }
+                }
 
                 loop {
                     let (n, _) = recv_from_with_timeout(&r_socket, &mut recv_buf, read_timeout).await?;
                     io::stdout().write_all(&recv_buf[..n]).await?;
                     io::stdout().flush().await?;
+                    reads += 1;
+                    if let Some(limit) = recv_limit {
+                        if reads >= limit {
+                            break anyhow::Ok(());
+                        }
+                    }
                 }
             } => res,
         }
@@ -96,10 +110,17 @@ pub async fn run_udp_node(
             } => res,
             res = async {
                 let mut recv_buf = [0u8; 65535];
+                let mut reads = 0;
                 loop {
                     let (n, _) = recv_from_with_timeout(&r_socket, &mut recv_buf, read_timeout).await?;
                     io::stdout().write_all(&recv_buf[..n]).await?;
                     io::stdout().flush().await?;
+                    reads += 1;
+                    if let Some(limit) = recv_limit {
+                        if reads >= limit {
+                            break anyhow::Ok(());
+                        }
+                    }
                 }
             } => res,
         }
