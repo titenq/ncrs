@@ -102,6 +102,9 @@ pub async fn run_client(
     recv_bytes: Option<u32>,
     send_bytes: Option<u32>,
     recv_limit: Option<u32>,
+    proxy: Option<String>,
+    proxy_type: Option<String>,
+    proxy_username: Option<String>,
 ) -> anyhow::Result<()> {
     let addr = format_endpoint(&target, port);
 
@@ -127,16 +130,31 @@ pub async fn run_client(
         eprintln!("{} Connecting...", "[*]".yellow());
     }
 
-    let stream = connect_tcp(
-        target_addr,
-        source_addr.as_deref(),
-        source_port,
-        timeout_duration,
-        debug,
-        recv_bytes,
-        send_bytes,
-    )
-    .await?;
+    let stream = if let Some(proxy_addr) = proxy {
+        crate::core::proxy::connect_via_proxy(
+            &proxy_addr,
+            proxy_type.as_deref(),
+            proxy_username.as_deref(),
+            &target,
+            port,
+            timeout_duration,
+            source_addr.as_deref(),
+            source_port,
+            debug,
+        )
+        .await?
+    } else {
+        connect_tcp(
+            target_addr,
+            source_addr.as_deref(),
+            source_port,
+            timeout_duration,
+            debug,
+            recv_bytes,
+            send_bytes,
+        )
+        .await?
+    };
 
     if tls {
         let mut root_cert_store = RootCertStore::empty();

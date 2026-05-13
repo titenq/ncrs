@@ -114,4 +114,16 @@ pub struct Args {
     /// [Flag: -U] Use Unix Domain Sockets
     #[arg(short = 'U', long = "unixsock")]
     pub unix: bool,
+
+    /// [Flag: -x] Proxy address and port
+    #[arg(short = 'x', long = "proxy", value_name = "ADDRESS[:PORT]")]
+    pub proxy: Option<String>,
+
+    /// [Flag: -X] Proxy protocol: "4" (SOCKS v.4), "5" (SOCKS v.5), or "connect" (HTTP)
+    #[arg(short = 'X', long = "proxy-type", value_name = "PROTOCOL")]
+    pub proxy_type: Option<String>,
+
+    /// [Flag: -P] Proxy username for authentication (only for HTTP CONNECT proxies at present)
+    #[arg(short = 'P', long = "proxy-username", value_name = "USERNAME")]
+    pub proxy_username: Option<String>,
 }

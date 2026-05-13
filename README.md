@@ -32,6 +32,7 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 - Enable debugging (SO_DEBUG) on the socket with `-D`.
 - Verbose mode with `-v` to print detailed connection info.
 - Silent execution by default (logs directed to stderr) for safe data piping.
+- Proxy support for TCP connections via SOCKS4, SOCKS5, and HTTP CONNECT with `-x`, `-X`, and `-P`.
 - Optional TLS mode with `--tls`.
 - Local TLS certificate generation with `--tls-gen` and `--tls-gen-force`.
 
@@ -70,6 +71,9 @@ Options:
   -W, --recv-limit <LIMIT>       Receive limit: Terminate after receiving the specified number of packets/chunks
   -U, --unixsock                 Use Unix Domain Sockets
   -r, --randomize-ports          Randomize remote ports
+  -x, --proxy <ADDRESS[:PORT]>   Proxy address and port (default port 1080 for SOCKS, 3128 for HTTP)
+  -X, --proxy-type <PROTOCOL>    Proxy protocol: "4" (SOCKSv4), "5" (SOCKSv5), or "connect" (HTTP)
+  -P, --proxy-username <USER>    Proxy username for authentication (only for HTTP CONNECT proxies)
       --tls                      ncrs extension: use TLS for the connection
       --tls-gen                  ncrs extension: generate TLS files in ~/.config/ncrs
       --tls-gen-force            ncrs extension: generate and overwrite TLS files
@@ -79,7 +83,7 @@ Important differences from OpenBSD `nc`:
 
 - `--tls` is an `ncrs` extension and is not an OpenBSD `nc` flag.
 - `--tls-gen` and `--tls-gen-force` are `ncrs` extensions and are not OpenBSD `nc` flags.
-- OpenBSD options such as `-F`, `-M`, `-m`, `-P`, `-S`, `-T`, `-t`, `-X`, `-x`, and `-Z` are not implemented yet.
+- OpenBSD options such as `-F`, `-M`, `-m`, `-S`, `-T`, `-t`, and `-Z` are not implemented yet.
 
 ## Requirements
 
@@ -441,6 +445,28 @@ ncrs -U /tmp/echo.sock -v
 When you use `-U`, `ncrs` interprets the target destination as a file path instead of an IP/hostname, and you do not need to provide a port. The socket file will be automatically removed if it already exists when starting a server.
 
 *Note: The `-U` flag is strictly available when compiled on Unix-like environments. Executing this flag on Windows will gracefully abort with an unsupported platform error.*
+
+### Proxy Support (-x, -X, -P)
+
+`ncrs` supports connecting to remote hosts through proxies (SOCKS4, SOCKS5, and HTTP CONNECT). This is useful for pivoting or hiding your origin IP.
+
+Connect to `example.com:80` through a SOCKS5 proxy running on `10.2.3.4:1080`:
+```bash
+ncrs -x 10.2.3.4:1080 -X 5 example.com 80 -v
+```
+*(Note: If `-X` is omitted, it defaults to SOCKS5 `5`)*
+
+Connect through an HTTP proxy on `10.2.3.4:8080`:
+```bash
+ncrs -x 10.2.3.4:8080 -X connect example.com 80 -v
+```
+
+Connect through an HTTP proxy requiring basic authentication:
+```bash
+ncrs -x 10.2.3.4:8080 -X connect -P myusername:mypassword example.com 80 -v
+```
+
+*Note: Proxy support is only available for outbound TCP connections. It cannot be used with listen (`-l`), UDP (`-u`), Unix sockets (`-U`), or custom source addresses (`-s`).*
 
 ## TLS Mode
 

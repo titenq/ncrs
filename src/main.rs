@@ -36,6 +36,16 @@ async fn main() -> anyhow::Result<()> {
         all_ports.extend(common::parse_port_range(p_arg));
     }
 
+    if args.proxy.is_some() {
+        if args.listen || args.udp || args.unix || args.source_addr.is_some() {
+            eprintln!(
+                "{} Error: A proxy cannot be used with any of the options -l, -u, -U, or -s.",
+                "[!]".red()
+            );
+            std::process::exit(1);
+        }
+    }
+
     if args.randomize_ports {
         use rand::seq::SliceRandom;
         let mut rng = rand::rng();
@@ -249,6 +259,9 @@ async fn main() -> anyhow::Result<()> {
             args.recv_bytes,
             args.send_bytes,
             args.recv_limit,
+            args.proxy,
+            args.proxy_type,
+            args.proxy_username,
         )
         .await?;
     } else {

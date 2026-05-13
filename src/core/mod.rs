@@ -3,6 +3,7 @@ mod duplex;
 mod scan;
 mod tcp;
 mod udp;
+pub mod proxy;
 
 pub use address::AddressFamily;
 pub use scan::run_port_scan;
