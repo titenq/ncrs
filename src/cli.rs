@@ -86,4 +86,8 @@ pub struct Args {
     /// [Flag: -i] Interval delay: specifies a delay time interval between lines/chunks of text sent and received
     #[arg(short = 'i', long = "interval", value_name = "SECONDS")]
     pub interval: Option<u64>,
+
+    /// [Flag: -U] Use Unix Domain Sockets
+    #[arg(short = 'U', long = "unixsock")]
+    pub unix: bool,
 }

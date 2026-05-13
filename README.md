@@ -24,6 +24,7 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 - Disable stdin reading with `-d` for background execution.
 - Quit delay after EOF on stdin with `-q`.
 - Interval delay for throttling data and port scanning with `-i`.
+- Unix Domain Sockets support with `-U` (cross-platform safe, Unix-only execution).
 - Silent execution by default (logs directed to stderr) for safe data piping.
 - Optional TLS mode with `--tls`.
 - Local TLS certificate generation with `--tls-gen` and `--tls-gen-force`.
@@ -56,6 +57,7 @@ Options:
   -k, --keep-alive               Keep accepting sequential inbound connections
   -N, --shutdown-on-eof          Shutdown the network socket after EOF on stdin
   -q, --quit-delay <SECONDS>     Quit delay: wait the specified seconds after EOF on stdin and quit
+  -U, --unixsock                 Use Unix Domain Sockets
       --tls                      ncrs extension: use TLS for the connection
       --tls-gen                  ncrs extension: generate TLS files in ~/.config/ncrs
       --tls-gen-force            ncrs extension: generate and overwrite TLS files
@@ -65,7 +67,7 @@ Important differences from OpenBSD `nc`:
 
 - `--tls` is an `ncrs` extension and is not an OpenBSD `nc` flag.
 - `--tls-gen` and `--tls-gen-force` are `ncrs` extensions and are not OpenBSD `nc` flags.
-- OpenBSD options such as `-b`, `-D`, `-F`, `-I`, `-M`, `-m`, `-O`, `-P`, `-r`, `-S`, `-T`, `-t`, `-U`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
+- OpenBSD options such as `-b`, `-D`, `-F`, `-I`, `-M`, `-m`, `-O`, `-P`, `-r`, `-S`, `-T`, `-t`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
 
 ## Requirements
 
@@ -335,6 +337,26 @@ To scan ports 20-100 with a 1-second delay between each port check (useful to ev
 ```bash
 ncrs server.com 20-100 -z -i 1
 ```
+
+### Unix Domain Sockets (-U)
+
+`ncrs` supports connecting to and listening on Unix domain sockets (on supported platforms like Linux and macOS). This is highly useful for interacting with local daemons or IPC (Inter-Process Communication) sockets without using TCP/UDP.
+
+**Listen on a Unix socket (Server):**
+To create a local server that listens on a Unix socket:
+```bash
+ncrs -l -U /tmp/echo.sock -v
+```
+
+**Connect to a Unix socket (Client):**
+To interact with a local service (like Docker, Redis, or our server above) that exposes a `.sock` file:
+```bash
+ncrs -U /tmp/echo.sock -v
+```
+
+When you use `-U`, `ncrs` interprets the target destination as a file path instead of an IP/hostname, and you do not need to provide a port. The socket file will be automatically removed if it already exists when starting a server.
+
+*Note: The `-U` flag is strictly available when compiled on Unix-like environments. Executing this flag on Windows will gracefully abort with an unsupported platform error.*
 
 ## TLS Mode
 

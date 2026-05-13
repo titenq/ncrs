@@ -440,7 +440,7 @@ async fn handle_server_stream_with_input(
     }
 }
 
-fn spawn_stdin_forwarder(input_tx: broadcast::Sender<Vec<u8>>, crlf: bool) {
+pub(crate) fn spawn_stdin_forwarder(input_tx: broadcast::Sender<Vec<u8>>, crlf: bool) {
     tokio::spawn(async move {
         let mut stdin = tokio::io::stdin();
         let mut buf = [0u8; 1024];

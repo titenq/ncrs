@@ -52,6 +52,69 @@ async fn main() -> anyhow::Result<()> {
     let connect_timeout = args.timeout.unwrap_or(5);
     let read_timeout = args.timeout.map(std::time::Duration::from_secs);
 
+    if args.unix {
+        #[cfg(unix)]
+        {
+            let target = match args.target {
+                Some(ref t) => t.clone(),
+                None => {
+                    eprintln!("{} Error: Target path is required for Unix Sockets.", "[!]".red());
+                    std::process::exit(1);
+                }
+            };
+
+            if args.listen {
+                if args.keep_alive {
+                    core::unix::run_unix_server_persistent(
+                        &target,
+                        args.verbose,
+                        args.crlf,
+                        read_timeout,
+                        args.shutdown_on_eof,
+                        args.no_stdin,
+                        args.quit_delay,
+                        args.interval,
+                    )
+                    .await?;
+                } else {
+                    core::unix::run_unix_server(
+                        &target,
+                        args.verbose,
+                        args.crlf,
+                        read_timeout,
+                        args.shutdown_on_eof,
+                        args.no_stdin,
+                        args.quit_delay,
+                        args.interval,
+                    )
+                    .await?;
+                }
+            } else {
+                core::unix::run_unix_client(
+                    &target,
+                    args.verbose,
+                    args.crlf,
+                    read_timeout,
+                    args.shutdown_on_eof,
+                    args.no_stdin,
+                    args.quit_delay,
+                    args.interval,
+                )
+                .await?;
+            }
+            return Ok(());
+        }
+
+        #[cfg(not(unix))]
+        {
+            eprintln!(
+                "{} Error: Unix Domain Sockets (-U) are not supported on this platform.",
+                "[!]".red()
+            );
+            std::process::exit(1);
+        }
+    }
+
     if args.scan {
         if let Some(target) = args.target {
             core::run_port_scan(
