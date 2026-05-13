@@ -17,10 +17,16 @@ pub async fn run_udp_node(
     source_port: Option<u16>,
     numeric: bool,
     read_timeout: Option<std::time::Duration>,
+    broadcast: bool,
 ) -> anyhow::Result<()> {
     let addr = udp_bind_addr(listen, port, family, source_addr.as_deref(), source_port)?;
 
     let socket = UdpSocket::bind(&addr).await?;
+
+    if broadcast {
+        socket.set_broadcast(true)?;
+    }
+
     let r_socket = Arc::new(socket);
     let s_socket = Arc::clone(&r_socket);
 

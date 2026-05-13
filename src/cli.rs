@@ -55,6 +55,10 @@ pub struct Args {
     #[arg(short = 'n', long)]
     pub numeric: bool,
 
+    /// [Flag: -b] Allow broadcast (SO_BROADCAST)
+    #[arg(short = 'b', long)]
+    pub broadcast: bool,
+
     /// [Flag: -4] IPv4 mode: force usage of IPv4 addresses
     #[arg(short = '4', long, conflicts_with = "ipv6")]
     pub ipv4: bool,

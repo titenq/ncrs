@@ -153,6 +153,7 @@ async fn main() -> anyhow::Result<()> {
             args.source_port,
             args.numeric,
             read_timeout,
+            args.broadcast,
         )
         .await?;
     } else if args.listen {

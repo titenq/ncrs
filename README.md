@@ -25,6 +25,8 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 - Quit delay after EOF on stdin with `-q`.
 - Interval delay for throttling data and port scanning with `-i`.
 - Unix Domain Sockets support with `-U` (cross-platform safe, Unix-only execution).
+- Allow broadcast (SO_BROADCAST) on the socket with `-b`.
+- Verbose mode with `-v` to print detailed connection info.
 - Silent execution by default (logs directed to stderr) for safe data piping.
 - Optional TLS mode with `--tls`.
 - Local TLS certificate generation with `--tls-gen` and `--tls-gen-force`.
@@ -51,6 +53,7 @@ Options:
   -n, --numeric                  Suppress name resolution
   -4, --ipv4                     Force IPv4
   -6, --ipv6                     Force IPv6
+  -b, --broadcast                Allow broadcast (SO_BROADCAST) on the socket
   -C, --crlf                     Send CRLF as line-ending
   -d, --no-stdin                 Do not attempt to read from stdin
   -i, --interval <SECONDS>       Interval delay: delay between lines of text and port scan connections
@@ -67,7 +70,7 @@ Important differences from OpenBSD `nc`:
 
 - `--tls` is an `ncrs` extension and is not an OpenBSD `nc` flag.
 - `--tls-gen` and `--tls-gen-force` are `ncrs` extensions and are not OpenBSD `nc` flags.
-- OpenBSD options such as `-b`, `-D`, `-F`, `-I`, `-M`, `-m`, `-O`, `-P`, `-r`, `-S`, `-T`, `-t`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
+- OpenBSD options such as `-D`, `-F`, `-I`, `-M`, `-m`, `-O`, `-P`, `-r`, `-S`, `-T`, `-t`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
 
 ## Requirements
 
@@ -156,6 +159,20 @@ ncrs 127.0.0.1 8080 -u -v
 
 Use `-u` when you want datagram-based communication instead of TCP.
 
+### Broadcast
+
+**Terminal 1 (Listener on a second device or local):**
+```bash
+ncrs -l 8080 -u -v
+```
+
+**Terminal 2 (Broadcaster):**
+```bash
+ncrs 255.255.255.255 8080 -u -b -v
+```
+
+Use `-b` to allow sending UDP packets to network broadcast addresses. Any device on your local network listening on that port will receive the messages.
+
 ### Port Scan
 
 ```bash
@@ -226,14 +243,26 @@ Use `-p` to choose the local source port used for outbound connections.
 
 ### IPv4
 
+**Terminal 1 (Server):**
 ```bash
-ncrs google.com 80 -4 -v
+ncrs -l 8080 -4 -v
+```
+
+**Terminal 2 (Client):**
+```bash
+ncrs localhost 8080 -4 -v
 ```
 
 Use `-4` to force IPv4 address resolution and connection.
 
 ### IPv6
 
+**Terminal 1 (Server):**
+```bash
+ncrs -l 8080 -6 -v
+```
+
+**Terminal 2 (Client):**
 ```bash
 ncrs ::1 8080 -6 -v
 ```
