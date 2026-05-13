@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 pub struct TlsPaths {
     pub cert: PathBuf,
@@ -24,42 +23,20 @@ pub fn generate_self_signed_cert(force: bool) -> anyhow::Result<()> {
         ));
     }
 
-    let status = Command::new("openssl")
-        .args([
-            "req", "-new", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout",
-        ])
-        .arg(&paths.key)
-        .args(["-out"])
-        .arg(&paths.cert)
-        .args([
-            "-days",
-            "365",
-            "-subj",
-            "/CN=localhost",
-            "-addext",
-            "subjectAltName = DNS:localhost,IP:127.0.0.1",
-            "-addext",
-            "basicConstraints = CA:FALSE",
-            "-addext",
-            "keyUsage = digitalSignature, keyEncipherment",
-        ])
-        .status()
-        .map_err(|e| anyhow::anyhow!("failed to execute openssl: {}", e))?;
+    let subject_alt_names = vec!["localhost".to_string(), "127.0.0.1".to_string()];
+    let cert = rcgen::generate_simple_self_signed(subject_alt_names)
+        .map_err(|e| anyhow::anyhow!("failed to generate certificate: {}", e))?;
 
-    if !status.success() {
-        return Err(anyhow::anyhow!(
-            "openssl failed while generating TLS certificate"
-        ));
-    }
+    std::fs::write(&paths.cert, cert.cert.pem())?;
+    std::fs::write(&paths.key, cert.signing_key.serialize_pem())?;
 
     Ok(())
 }
 
 pub fn config_tls_paths() -> anyhow::Result<TlsPaths> {
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .ok_or_else(|| anyhow::anyhow!("HOME is not set; cannot resolve TLS config directory"))?;
-    let dir = home.join(".config").join("ncrs");
+    let proj_dirs = directories::ProjectDirs::from("", "", "ncrs")
+        .ok_or_else(|| anyhow::anyhow!("could not determine configuration directory"))?;
+    let dir = proj_dirs.config_dir();
 
     Ok(TlsPaths {
         cert: dir.join("cert.pem"),
