@@ -61,7 +61,6 @@ Important differences from OpenBSD `nc`:
 ## Requirements
 
 - Rust with Edition 2024 support.
-- OpenSSL command-line tools only if you want to generate local certificates for TLS testing.
 
 ## Installation
 
@@ -76,6 +75,25 @@ To install globally:
 ```bash
 sudo cp target/release/ncrs /usr/local/bin/
 ```
+
+## Releases
+
+`ncrs` has an automated CI/CD pipeline via GitHub Actions. Whenever a new tag starting with `v` is pushed, it automatically compiles native executables for Linux, Windows, and macOS, and attaches them to a new GitHub Release.
+
+To trigger a release:
+
+```bash
+# 1. Commit your changes
+git commit -m "feat: your new feature"
+
+# 2. Create a version tag
+git tag v0.1.0
+
+# 3. Push the tags to GitHub
+git push origin --tags
+```
+
+You can then download the compiled binaries from the **Releases** tab of the GitHub repository.
 
 ## Usage
 

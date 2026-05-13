@@ -17,7 +17,8 @@
   - Substituir por uma implementação em Rust puro antes da distribuição para Windows.
   - Objetivo: `ncrs.exe --tls-gen` deve funcionar sem exigir `openssl.exe` no `PATH`.
 
-- Planejar a distribuição para Windows.
-  - Gerar `.exe` com target Windows.
-  - Validar caminhos de configuração, geração TLS, TCP, UDP e comportamento de scan no Windows.
-  - Decidir o formato de empacotamento depois que o comportamento do binário estiver estável.
+- [x] Implementar a distribuição para Windows, macOS e Linux.
+  - [x] Configurar CI/CD com GitHub Actions (`.github/workflows/release.yml`).
+  - [x] Gerar executáveis nativos via `windows-latest`, `ubuntu-latest` e `macos-latest`.
+  - [x] Automatizar o anexo de binários na página de Releases do GitHub quando uma nova tag `v*` é publicada.
+  - [x] Validar caminhos de configuração, geração TLS, TCP, UDP e comportamento de scan no Windows.
