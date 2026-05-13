@@ -116,6 +116,7 @@ async fn main() -> anyhow::Result<()> {
                 read_timeout,
                 args.shutdown_on_eof,
                 args.no_stdin,
+                args.quit_delay,
             )
             .await?;
         } else {
@@ -128,6 +129,7 @@ async fn main() -> anyhow::Result<()> {
                 read_timeout,
                 args.shutdown_on_eof,
                 args.no_stdin,
+                args.quit_delay,
             )
             .await?;
         }
@@ -146,6 +148,7 @@ async fn main() -> anyhow::Result<()> {
             read_timeout,
             args.shutdown_on_eof,
             args.no_stdin,
+            args.quit_delay,
         )
         .await?;
     } else {

@@ -1,11 +1,11 @@
 use tokio::io::{self, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::broadcast;
 
-pub(crate) async fn handle_duplex<S>(stream: S, crlf: bool, shutdown_on_eof: bool, no_stdin: bool) -> anyhow::Result<()>
+pub(crate) async fn handle_duplex<S>(stream: S, crlf: bool, shutdown_on_eof: bool, no_stdin: bool, quit_delay: Option<i32>) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    handle_duplex_inner(stream, crlf, None, shutdown_on_eof, no_stdin).await
+    handle_duplex_inner(stream, crlf, None, shutdown_on_eof, no_stdin, quit_delay).await
 }
 
 pub(crate) async fn handle_duplex_with_timeout<S>(
@@ -14,11 +14,12 @@ pub(crate) async fn handle_duplex_with_timeout<S>(
     timeout_duration: std::time::Duration,
     shutdown_on_eof: bool,
     no_stdin: bool,
+    quit_delay: Option<i32>,
 ) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    handle_duplex_inner(stream, crlf, Some(timeout_duration), shutdown_on_eof, no_stdin).await
+    handle_duplex_inner(stream, crlf, Some(timeout_duration), shutdown_on_eof, no_stdin, quit_delay).await
 }
 
 async fn handle_duplex_inner<S>(
@@ -27,6 +28,7 @@ async fn handle_duplex_inner<S>(
     read_timeout: Option<std::time::Duration>,
     shutdown_on_eof: bool,
     no_stdin: bool,
+    quit_delay: Option<i32>,
 ) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -61,6 +63,15 @@ where
         if shutdown_on_eof {
             writer.shutdown().await?;
         }
+
+        if let Some(delay) = quit_delay {
+            if delay > 0 {
+                tokio::time::sleep(std::time::Duration::from_secs(delay as u64)).await;
+            } else if delay < 0 {
+                std::future::pending::<()>().await;
+            }
+        }
+
         anyhow::Ok(())
     });
 
@@ -83,7 +94,11 @@ where
         },
         res = &mut stdin_to_socket => {
             res??;
-            socket_to_stdout.await??;
+            if quit_delay.is_some() {
+                socket_to_stdout.abort();
+            } else {
+                socket_to_stdout.await??;
+            }
         },
     }
 
@@ -125,6 +140,7 @@ pub(crate) async fn handle_duplex_with_input<S>(
     mut input_rx: broadcast::Receiver<Vec<u8>>,
     read_timeout: Option<std::time::Duration>,
     shutdown_on_eof: bool,
+    quit_delay: Option<i32>,
 ) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -163,8 +179,18 @@ where
                         if shutdown_on_eof {
                             writer.shutdown().await?;
                         }
-                        socket_to_stdout.await??;
-                        return Ok(());
+                        if let Some(delay) = quit_delay {
+                            if delay > 0 {
+                                tokio::time::sleep(std::time::Duration::from_secs(delay as u64)).await;
+                            } else if delay < 0 {
+                                std::future::pending::<()>().await;
+                            }
+                            socket_to_stdout.abort();
+                            return Ok(());
+                        } else {
+                            socket_to_stdout.await??;
+                            return Ok(());
+                        }
                     }
                 }
             }

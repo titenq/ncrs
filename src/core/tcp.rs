@@ -87,6 +87,7 @@ pub async fn run_client(
     read_timeout: Option<std::time::Duration>,
     shutdown_on_eof: bool,
     no_stdin: bool,
+    quit_delay: Option<i32>,
 ) -> anyhow::Result<()> {
     let addr = format_endpoint(&target, port);
 
@@ -144,16 +145,16 @@ pub async fn run_client(
 
         print_connected(verbose, crlf);
         if let Some(timeout_duration) = read_timeout {
-            handle_duplex_with_timeout(tls_stream, crlf, timeout_duration, shutdown_on_eof, no_stdin).await
+            handle_duplex_with_timeout(tls_stream, crlf, timeout_duration, shutdown_on_eof, no_stdin, quit_delay).await
         } else {
-            handle_duplex(tls_stream, crlf, shutdown_on_eof, no_stdin).await
+            handle_duplex(tls_stream, crlf, shutdown_on_eof, no_stdin, quit_delay).await
         }
     } else {
         print_connected(verbose, crlf);
         if let Some(timeout_duration) = read_timeout {
-            handle_duplex_with_timeout(stream, crlf, timeout_duration, shutdown_on_eof, no_stdin).await
+            handle_duplex_with_timeout(stream, crlf, timeout_duration, shutdown_on_eof, no_stdin, quit_delay).await
         } else {
-            handle_duplex(stream, crlf, shutdown_on_eof, no_stdin).await
+            handle_duplex(stream, crlf, shutdown_on_eof, no_stdin, quit_delay).await
         }
     }
 }
@@ -167,11 +168,12 @@ pub async fn run_server(
     read_timeout: Option<std::time::Duration>,
     shutdown_on_eof: bool,
     no_stdin: bool,
+    quit_delay: Option<i32>,
 ) -> anyhow::Result<()> {
     let listener = bind_listener(port, family).await?;
     let (stream, remote_addr) = listener.accept().await?;
 
-    handle_server_stream(stream, remote_addr, verbose, tls, crlf, read_timeout, shutdown_on_eof, no_stdin).await
+    handle_server_stream(stream, remote_addr, verbose, tls, crlf, read_timeout, shutdown_on_eof, no_stdin, quit_delay).await
 }
 
 pub async fn run_server_persistent(
@@ -183,6 +185,7 @@ pub async fn run_server_persistent(
     read_timeout: Option<std::time::Duration>,
     shutdown_on_eof: bool,
     no_stdin: bool,
+    quit_delay: Option<i32>,
 ) -> anyhow::Result<()> {
     let listener = bind_listener(port, family).await?;
     let (input_tx, _) = broadcast::channel(16);
@@ -202,6 +205,7 @@ pub async fn run_server_persistent(
             input_rx,
             read_timeout,
             shutdown_on_eof,
+            quit_delay,
         )
         .await
         {
@@ -232,6 +236,7 @@ async fn handle_server_stream(
     read_timeout: Option<std::time::Duration>,
     shutdown_on_eof: bool,
     no_stdin: bool,
+    quit_delay: Option<i32>,
 ) -> anyhow::Result<()> {
     if verbose {
         eprintln!("{} Connection from {}", "[+]".green(), remote_addr);
@@ -269,15 +274,15 @@ async fn handle_server_stream(
         }
 
         if let Some(timeout_duration) = read_timeout {
-            handle_duplex_with_timeout(tls_stream, crlf, timeout_duration, shutdown_on_eof, no_stdin).await
+            handle_duplex_with_timeout(tls_stream, crlf, timeout_duration, shutdown_on_eof, no_stdin, quit_delay).await
         } else {
-            handle_duplex(tls_stream, crlf, shutdown_on_eof, no_stdin).await
+            handle_duplex(tls_stream, crlf, shutdown_on_eof, no_stdin, quit_delay).await
         }
     } else {
         if let Some(timeout_duration) = read_timeout {
-            handle_duplex_with_timeout(stream, crlf, timeout_duration, shutdown_on_eof, no_stdin).await
+            handle_duplex_with_timeout(stream, crlf, timeout_duration, shutdown_on_eof, no_stdin, quit_delay).await
         } else {
-            handle_duplex(stream, crlf, shutdown_on_eof, no_stdin).await
+            handle_duplex(stream, crlf, shutdown_on_eof, no_stdin, quit_delay).await
         }
     }
 }
@@ -290,6 +295,7 @@ async fn handle_server_stream_with_input(
     input_rx: broadcast::Receiver<Vec<u8>>,
     read_timeout: Option<std::time::Duration>,
     shutdown_on_eof: bool,
+    quit_delay: Option<i32>,
 ) -> anyhow::Result<()> {
     if verbose {
         eprintln!("{} Connection from {}", "[+]".green(), remote_addr);
@@ -326,9 +332,9 @@ async fn handle_server_stream_with_input(
             eprintln!("{} TLS Handshake successful!", "[+]".green());
         }
 
-        handle_duplex_with_input(tls_stream, input_rx, read_timeout, shutdown_on_eof).await
+        handle_duplex_with_input(tls_stream, input_rx, read_timeout, shutdown_on_eof, quit_delay).await
     } else {
-        handle_duplex_with_input(stream, input_rx, read_timeout, shutdown_on_eof).await
+        handle_duplex_with_input(stream, input_rx, read_timeout, shutdown_on_eof, quit_delay).await
     }
 }
 

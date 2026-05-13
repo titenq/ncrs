@@ -78,4 +78,8 @@ pub struct Args {
     /// [Flag: -d] Do not attempt to read from stdin
     #[arg(short = 'd', long = "no-stdin")]
     pub no_stdin: bool,
+
+    /// [Flag: -q] Quit delay: after EOF on stdin, wait the specified number of seconds and then quit
+    #[arg(short = 'q', long = "quit-delay", value_name = "SECONDS", allow_hyphen_values = true)]
+    pub quit_delay: Option<i32>,
 }

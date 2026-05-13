@@ -20,6 +20,10 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 - Numeric-only mode with `-n`.
 - Local source address selection with `-s`.
 - Local source port selection with `-p`.
+- Shutdown the network socket after EOF on stdin with `-N`.
+- Disable stdin reading with `-d` for background execution.
+- Quit delay after EOF on stdin with `-q`.
+- Silent execution by default (logs directed to stderr) for safe data piping.
 - Optional TLS mode with `--tls`.
 - Local TLS certificate generation with `--tls-gen` and `--tls-gen-force`.
 
@@ -49,6 +53,7 @@ Options:
   -d, --no-stdin                 Do not attempt to read from stdin
   -k, --keep-alive               Keep accepting sequential inbound connections
   -N, --shutdown-on-eof          Shutdown the network socket after EOF on stdin
+  -q, --quit-delay <SECONDS>     Quit delay: wait the specified seconds after EOF on stdin and quit
       --tls                      ncrs extension: use TLS for the connection
       --tls-gen                  ncrs extension: generate TLS files in ~/.config/ncrs
       --tls-gen-force            ncrs extension: generate and overwrite TLS files
@@ -58,7 +63,7 @@ Important differences from OpenBSD `nc`:
 
 - `--tls` is an `ncrs` extension and is not an OpenBSD `nc` flag.
 - `--tls-gen` and `--tls-gen-force` are `ncrs` extensions and are not OpenBSD `nc` flags.
-- OpenBSD options such as `-b`, `-D`, `-F`, `-h`, `-I`, `-i`, `-M`, `-m`, `-O`, `-P`, `-q`, `-r`, `-S`, `-T`, `-t`, `-U`, `-V`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
+- OpenBSD options such as `-b`, `-D`, `-F`, `-I`, `-i`, `-M`, `-m`, `-O`, `-P`, `-r`, `-S`, `-T`, `-t`, `-U`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
 
 ## Requirements
 
@@ -292,6 +297,28 @@ cat received_data.txt
 ```
 
 With `-d`, `ncrs` will solely receive data from the network without expecting or reading any input from your keyboard, making it perfect for silent daemon-like execution.
+
+### Quit Delay (-q)
+
+When sending data through a pipeline, the `-N` flag shuts down the socket immediately. If the server takes a few seconds to process your data and send a response, `-N` will close the connection too early and you won't see the reply. 
+
+Use `-q <SECONDS>` to specify a maximum delay before quitting. To see it in action waiting exactly 5 seconds, try this with two terminals:
+
+**Terminal 1 (Server):**
+Start a simple server that keeps the connection open:
+```bash
+ncrs -l 8080
+```
+
+**Terminal 2 (Client):**
+Send a message and instruct `ncrs` to wait 5 seconds after sending it:
+```bash
+echo "Process this data" | ncrs localhost 8080 -q 5
+```
+
+Because the server (Terminal 1) is keeping the connection open, the client (Terminal 2) will send the message, detect the end of the `echo` text, **wait exactly 5 seconds**, and then gracefully exit. 
+
+*Note: If the server finishes sending its response and closes the connection **before** the 5 seconds are up, `ncrs` exits immediately. You can use `-q 0` to exit instantly (aborting everything) or `-q -1` to wait forever.*
 
 ## TLS Mode
 
