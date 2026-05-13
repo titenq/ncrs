@@ -1,11 +1,27 @@
 use tokio::io::{self, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::broadcast;
 
-pub(crate) async fn handle_duplex<S>(stream: S, crlf: bool, shutdown_on_eof: bool, no_stdin: bool, quit_delay: Option<i32>) -> anyhow::Result<()>
+pub(crate) async fn handle_duplex<S>(
+    stream: S,
+    crlf: bool,
+    shutdown_on_eof: bool,
+    no_stdin: bool,
+    quit_delay: Option<i32>,
+    interval: Option<u64>,
+) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    handle_duplex_inner(stream, crlf, None, shutdown_on_eof, no_stdin, quit_delay).await
+    handle_duplex_inner(
+        stream,
+        crlf,
+        None,
+        shutdown_on_eof,
+        no_stdin,
+        quit_delay,
+        interval,
+    )
+    .await
 }
 
 pub(crate) async fn handle_duplex_with_timeout<S>(
@@ -15,11 +31,21 @@ pub(crate) async fn handle_duplex_with_timeout<S>(
     shutdown_on_eof: bool,
     no_stdin: bool,
     quit_delay: Option<i32>,
+    interval: Option<u64>,
 ) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    handle_duplex_inner(stream, crlf, Some(timeout_duration), shutdown_on_eof, no_stdin, quit_delay).await
+    handle_duplex_inner(
+        stream,
+        crlf,
+        Some(timeout_duration),
+        shutdown_on_eof,
+        no_stdin,
+        quit_delay,
+        interval,
+    )
+    .await
 }
 
 async fn handle_duplex_inner<S>(
@@ -29,6 +55,7 @@ async fn handle_duplex_inner<S>(
     shutdown_on_eof: bool,
     no_stdin: bool,
     quit_delay: Option<i32>,
+    interval: Option<u64>,
 ) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -45,6 +72,9 @@ where
         let mut buf = [0u8; 1024];
 
         loop {
+            if let Some(delay) = interval {
+                tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+            }
             let n = stdin.read(&mut buf).await?;
             if n == 0 {
                 break;
@@ -78,9 +108,25 @@ where
     let socket_to_stdout = tokio::spawn(async move {
         let mut stdout = io::stdout();
         if let Some(timeout_duration) = read_timeout {
-            copy_with_idle_timeout(&mut reader, &mut stdout, timeout_duration).await
+            copy_with_idle_timeout(&mut reader, &mut stdout, timeout_duration, interval).await
         } else {
-            io::copy(&mut reader, &mut stdout).await
+            if let Some(delay) = interval {
+                let mut buf = [0u8; 8192];
+                let mut copied = 0;
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+                    let n = reader.read(&mut buf).await?;
+                    if n == 0 {
+                        break;
+                    }
+                    stdout.write_all(&buf[..n]).await?;
+                    stdout.flush().await?;
+                    copied += n as u64;
+                }
+                Ok(copied)
+            } else {
+                io::copy(&mut reader, &mut stdout).await
+            }
         }
     });
 
@@ -109,6 +155,7 @@ async fn copy_with_idle_timeout<R, W>(
     reader: &mut R,
     writer: &mut W,
     timeout_duration: std::time::Duration,
+    interval: Option<u64>,
 ) -> std::io::Result<u64>
 where
     R: AsyncRead + Unpin,
@@ -118,6 +165,9 @@ where
     let mut copied = 0;
 
     loop {
+        if let Some(delay) = interval {
+            tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+        }
         let n = match tokio::time::timeout(timeout_duration, reader.read(&mut buf)).await {
             Ok(result) => result?,
             Err(_) => break,
@@ -141,6 +191,7 @@ pub(crate) async fn handle_duplex_with_input<S>(
     read_timeout: Option<std::time::Duration>,
     shutdown_on_eof: bool,
     quit_delay: Option<i32>,
+    interval: Option<u64>,
 ) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -148,7 +199,23 @@ where
     let (mut reader, mut writer) = io::split(stream);
     let socket_to_stdout = tokio::spawn(async move {
         let mut stdout = io::stdout();
-        io::copy(&mut reader, &mut stdout).await
+        if let Some(delay) = interval {
+            let mut buf = [0u8; 8192];
+            let mut copied = 0;
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+                let n = reader.read(&mut buf).await?;
+                if n == 0 {
+                    break;
+                }
+                stdout.write_all(&buf[..n]).await?;
+                stdout.flush().await?;
+                copied += n as u64;
+            }
+            Ok(copied)
+        } else {
+            io::copy(&mut reader, &mut stdout).await
+        }
     });
 
     tokio::pin!(socket_to_stdout);

@@ -48,6 +48,7 @@ async fn main() -> anyhow::Result<()> {
     } else {
         core::AddressFamily::Any
     };
+    
     let connect_timeout = args.timeout.unwrap_or(5);
     let read_timeout = args.timeout.map(std::time::Duration::from_secs);
 
@@ -62,6 +63,7 @@ async fn main() -> anyhow::Result<()> {
                 args.source_addr,
                 args.source_port,
                 args.numeric,
+                args.interval,
             )
             .await?;
         }
@@ -117,6 +119,7 @@ async fn main() -> anyhow::Result<()> {
                 args.shutdown_on_eof,
                 args.no_stdin,
                 args.quit_delay,
+                args.interval,
             )
             .await?;
         } else {
@@ -130,6 +133,7 @@ async fn main() -> anyhow::Result<()> {
                 args.shutdown_on_eof,
                 args.no_stdin,
                 args.quit_delay,
+                args.interval,
             )
             .await?;
         }
@@ -149,6 +153,7 @@ async fn main() -> anyhow::Result<()> {
             args.shutdown_on_eof,
             args.no_stdin,
             args.quit_delay,
+            args.interval,
         )
         .await?;
     } else {

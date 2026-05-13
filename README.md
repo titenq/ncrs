@@ -23,6 +23,7 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 - Shutdown the network socket after EOF on stdin with `-N`.
 - Disable stdin reading with `-d` for background execution.
 - Quit delay after EOF on stdin with `-q`.
+- Interval delay for throttling data and port scanning with `-i`.
 - Silent execution by default (logs directed to stderr) for safe data piping.
 - Optional TLS mode with `--tls`.
 - Local TLS certificate generation with `--tls-gen` and `--tls-gen-force`.
@@ -51,6 +52,7 @@ Options:
   -6, --ipv6                     Force IPv6
   -C, --crlf                     Send CRLF as line-ending
   -d, --no-stdin                 Do not attempt to read from stdin
+  -i, --interval <SECONDS>       Interval delay: delay between lines of text and port scan connections
   -k, --keep-alive               Keep accepting sequential inbound connections
   -N, --shutdown-on-eof          Shutdown the network socket after EOF on stdin
   -q, --quit-delay <SECONDS>     Quit delay: wait the specified seconds after EOF on stdin and quit
@@ -63,7 +65,7 @@ Important differences from OpenBSD `nc`:
 
 - `--tls` is an `ncrs` extension and is not an OpenBSD `nc` flag.
 - `--tls-gen` and `--tls-gen-force` are `ncrs` extensions and are not OpenBSD `nc` flags.
-- OpenBSD options such as `-b`, `-D`, `-F`, `-I`, `-i`, `-M`, `-m`, `-O`, `-P`, `-r`, `-S`, `-T`, `-t`, `-U`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
+- OpenBSD options such as `-b`, `-D`, `-F`, `-I`, `-M`, `-m`, `-O`, `-P`, `-r`, `-S`, `-T`, `-t`, `-U`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
 
 ## Requirements
 
@@ -319,6 +321,20 @@ echo "Process this data" | ncrs localhost 8080 -q 5
 Because the server (Terminal 1) is keeping the connection open, the client (Terminal 2) will send the message, detect the end of the `echo` text, **wait exactly 5 seconds**, and then gracefully exit. 
 
 *Note: If the server finishes sending its response and closes the connection **before** the 5 seconds are up, `ncrs` exits immediately. You can use `-q 0` to exit instantly (aborting everything) or `-q -1` to wait forever.*
+
+### Interval Delay (-i)
+
+The `-i` flag introduces a delay between each block of data sent and received. It also introduces a delay between each port connection attempt when scanning multiple ports (`-z`).
+
+To simulate a slow client (Slowloris-style) sending data with a 3-second delay between each chunk:
+```bash
+cat large_file.txt | ncrs server.com 8080 -i 3
+```
+
+To scan ports 20-100 with a 1-second delay between each port check (useful to evade detection or rate limits):
+```bash
+ncrs server.com 20-100 -z -i 1
+```
 
 ## TLS Mode
 

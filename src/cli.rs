@@ -82,4 +82,8 @@ pub struct Args {
     /// [Flag: -q] Quit delay: after EOF on stdin, wait the specified number of seconds and then quit
     #[arg(short = 'q', long = "quit-delay", value_name = "SECONDS", allow_hyphen_values = true)]
     pub quit_delay: Option<i32>,
+
+    /// [Flag: -i] Interval delay: specifies a delay time interval between lines/chunks of text sent and received
+    #[arg(short = 'i', long = "interval", value_name = "SECONDS")]
+    pub interval: Option<u64>,
 }

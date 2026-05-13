@@ -12,6 +12,7 @@ pub async fn run_port_scan(
     source_addr: Option<String>,
     source_port: Option<u16>,
     numeric: bool,
+    interval: Option<u64>,
 ) -> anyhow::Result<()> {
     if numeric {
         let port = ports.first().copied().unwrap_or(0);
@@ -31,6 +32,9 @@ pub async fn run_port_scan(
     }
 
     for port in ports {
+        if let Some(delay) = interval {
+            tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+        }
         let t = Arc::clone(&target);
         let source_addr = source_addr.clone();
         handles.push(tokio::spawn(async move {
