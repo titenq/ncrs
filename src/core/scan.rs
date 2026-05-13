@@ -36,12 +36,14 @@ pub async fn run_port_scan(
         if let Some(delay) = interval {
             tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
         }
+        
         let t = Arc::clone(&target);
         let source_addr = source_addr.clone();
+
         handles.push(tokio::spawn(async move {
             let timeout = std::time::Duration::from_secs(timeout_secs);
             if let Ok(addr) = resolve_address(&t, port, family, timeout, numeric).await {
-                if connect_tcp(addr, source_addr.as_deref(), source_port, timeout, debug)
+                if connect_tcp(addr, source_addr.as_deref(), source_port, timeout, debug, None, None)
                     .await
                     .is_ok()
                 {

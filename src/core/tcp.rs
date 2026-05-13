@@ -21,38 +21,20 @@ pub(crate) async fn connect_tcp(
     source_port: Option<u16>,
     timeout_duration: std::time::Duration,
     debug: bool,
+    recv_bytes: Option<u32>,
+    send_bytes: Option<u32>,
 ) -> anyhow::Result<TcpStream> {
-    if source_addr.is_none() && source_port.is_none() {
-        return match tokio::time::timeout(timeout_duration, TcpStream::connect(target_addr)).await {
-            Ok(Ok(s)) => {
-                if debug {
-                    let _ = crate::common::set_socket_debug(&s);
-                }
-                Ok(s)
-            },
-            Ok(Err(e)) => Err(anyhow::anyhow!(
-                "Failed to connect to {}: {}",
-                target_addr,
-                e
-            )),
-            Err(_) => Err(anyhow::anyhow!(
-                "Connection to {} timed out after {}s",
-                target_addr,
-                timeout_duration.as_secs()
-            )),
-        };
-    }
-
     let local_ip = match source_addr {
-        Some(addr) => addr.parse::<IpAddr>()?,
-        None if target_addr.is_ipv4() => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-        None => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
+        Some(addr) => Some(addr.parse::<IpAddr>()?),
+        None => None,
     };
 
-    if target_addr.is_ipv4() != local_ip.is_ipv4() {
-        return Err(anyhow::anyhow!(
-            "Source address family does not match target address family"
-        ));
+    if let Some(ip) = local_ip {
+        if target_addr.is_ipv4() != ip.is_ipv4() {
+            return Err(anyhow::anyhow!(
+                "Source address family does not match target address family"
+            ));
+        }
     }
 
     let socket = if target_addr.is_ipv4() {
@@ -60,18 +42,36 @@ pub(crate) async fn connect_tcp(
     } else {
         TcpSocket::new_v6()?
     };
+
     if debug {
         let _ = crate::common::set_socket_debug(&socket);
     }
-    let local_addr = SocketAddr::new(local_ip, source_port.unwrap_or(0));
-    socket.bind(local_addr)?;
+    
+    if let Some(size) = recv_bytes {
+        socket.set_recv_buffer_size(size)?;
+    }
+    
+    if let Some(size) = send_bytes {
+        socket.set_send_buffer_size(size)?;
+    }
+
+    if local_ip.is_some() || source_port.is_some() {
+        let ip = local_ip.unwrap_or_else(|| {
+            if target_addr.is_ipv4() {
+                IpAddr::V4(Ipv4Addr::UNSPECIFIED)
+            } else {
+                IpAddr::V6(Ipv6Addr::UNSPECIFIED)
+            }
+        });
+        let local_addr = SocketAddr::new(ip, source_port.unwrap_or(0));
+        socket.bind(local_addr)?;
+    }
 
     match tokio::time::timeout(timeout_duration, socket.connect(target_addr)).await {
         Ok(Ok(s)) => Ok(s),
         Ok(Err(e)) => Err(anyhow::anyhow!(
-            "Failed to connect to {} from {}: {}",
+            "Failed to connect to {}: {}",
             target_addr,
-            local_addr,
             e
         )),
         Err(_) => Err(anyhow::anyhow!(
@@ -99,6 +99,8 @@ pub async fn run_client(
     quit_delay: Option<i32>,
     interval: Option<u64>,
     debug: bool,
+    recv_bytes: Option<u32>,
+    send_bytes: Option<u32>,
 ) -> anyhow::Result<()> {
     let addr = format_endpoint(&target, port);
 
@@ -130,6 +132,8 @@ pub async fn run_client(
         source_port,
         timeout_duration,
         debug,
+        recv_bytes,
+        send_bytes,
     )
     .await?;
 
@@ -217,8 +221,10 @@ pub async fn run_server(
     quit_delay: Option<i32>,
     interval: Option<u64>,
     debug: bool,
+    recv_bytes: Option<u32>,
+    send_bytes: Option<u32>,
 ) -> anyhow::Result<()> {
-    let listener = bind_listener(port, family, debug).await?;
+    let listener = bind_listener(port, family, debug, recv_bytes, send_bytes).await?;
     let (stream, remote_addr) = listener.accept().await?;
 
     handle_server_stream(
@@ -248,8 +254,10 @@ pub async fn run_server_persistent(
     quit_delay: Option<i32>,
     interval: Option<u64>,
     debug: bool,
+    recv_bytes: Option<u32>,
+    send_bytes: Option<u32>,
 ) -> anyhow::Result<()> {
-    let listener = bind_listener(port, family, debug).await?;
+    let listener = bind_listener(port, family, debug, recv_bytes, send_bytes).await?;
     let (input_tx, _) = broadcast::channel(16);
     if !no_stdin {
         spawn_stdin_forwarder(input_tx.clone(), crlf);
@@ -279,17 +287,42 @@ pub async fn run_server_persistent(
     }
 }
 
-async fn bind_listener(port: u16, family: AddressFamily, debug: bool) -> anyhow::Result<TcpListener> {
+async fn bind_listener(port: u16, family: AddressFamily, debug: bool, recv_bytes: Option<u32>, send_bytes: Option<u32>) -> anyhow::Result<TcpListener> {
     let addr = match family {
         AddressFamily::Any | AddressFamily::Ipv4 => format!("0.0.0.0:{}", port),
         AddressFamily::Ipv6 => format!("[::]:{}", port),
     };
 
-    let listener = TcpListener::bind(&addr).await?;
+    let socket = if matches!(family, AddressFamily::Ipv6) {
+        TcpSocket::new_v6()?
+    } else {
+        TcpSocket::new_v4()?
+    };
+
     if debug {
-        let _ = crate::common::set_socket_debug(&listener);
+        let _ = crate::common::set_socket_debug(&socket);
     }
-    eprintln!("{} Listening on {}...", "[*]".yellow(), addr);
+    
+    if let Some(size) = recv_bytes {
+        socket.set_recv_buffer_size(size)?;
+    }
+    
+    if let Some(size) = send_bytes {
+        socket.set_send_buffer_size(size)?;
+    }
+    
+    socket.set_reuseaddr(true)?;
+    
+    let local_addr = addr.parse::<SocketAddr>()?;
+    socket.bind(local_addr)?;
+    let listener = socket.listen(1024)?;
+
+    if debug {
+        eprintln!("{} Listening on {}...", "[*]".yellow(), addr);
+    } else {
+        eprintln!("{} Listening on {}...", "[*]".yellow(), addr);
+    }
+    
     Ok(listener)
 }
 

@@ -190,6 +190,8 @@ async fn main() -> anyhow::Result<()> {
                 args.quit_delay,
                 args.interval,
                 args.debug,
+                args.recv_bytes,
+                args.send_bytes,
             )
             .await?;
         } else {
@@ -205,6 +207,8 @@ async fn main() -> anyhow::Result<()> {
                 args.quit_delay,
                 args.interval,
                 args.debug,
+                args.recv_bytes,
+                args.send_bytes,
             )
             .await?;
         }
@@ -226,6 +230,8 @@ async fn main() -> anyhow::Result<()> {
             args.quit_delay,
             args.interval,
             args.debug,
+            args.recv_bytes,
+            args.send_bytes,
         )
         .await?;
     } else {

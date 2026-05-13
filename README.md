@@ -25,6 +25,7 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 - Quit delay after EOF on stdin with `-q`.
 - Interval delay for throttling data and port scanning with `-i`.
 - Unix Domain Sockets support with `-U` (cross-platform safe, Unix-only execution).
+- Specify the size of the TCP receive and send buffers in bytes with `-I` and `-O`.
 - Allow broadcast (SO_BROADCAST) on the socket with `-b`.
 - Enable debugging (SO_DEBUG) on the socket with `-D`.
 - Verbose mode with `-v` to print detailed connection info.
@@ -58,6 +59,8 @@ Options:
   -D, --debug                    Enable debugging on the socket
   -C, --crlf                     Send CRLF as line-ending
   -d, --no-stdin                 Do not attempt to read from stdin
+  -I, --recv-bytes <BYTES>       Specify the size of the TCP receive buffer in bytes
+  -O, --send-bytes <BYTES>       Specify the size of the TCP send buffer in bytes
   -i, --interval <SECONDS>       Interval delay: delay between lines of text and port scan connections
   -k, --keep-alive               Keep accepting sequential inbound connections
   -N, --shutdown-on-eof          Shutdown the network socket after EOF on stdin
@@ -72,7 +75,7 @@ Important differences from OpenBSD `nc`:
 
 - `--tls` is an `ncrs` extension and is not an OpenBSD `nc` flag.
 - `--tls-gen` and `--tls-gen-force` are `ncrs` extensions and are not OpenBSD `nc` flags.
-- OpenBSD options such as `-F`, `-I`, `-M`, `-m`, `-O`, `-P`, `-r`, `-S`, `-T`, `-t`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
+- OpenBSD options such as `-F`, `-M`, `-m`, `-P`, `-r`, `-S`, `-T`, `-t`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
 
 ## Requirements
 
@@ -382,6 +385,20 @@ To scan ports 20-100 with a 1-second delay between each port check (useful to ev
 ```bash
 ncrs server.com 20-100 -z -i 1
 ```
+
+### Receive and Send Buffer Size (-I, -O)
+
+**Terminal 1 (Server):**
+```bash
+ncrs -l 8080 -I 8192 -v
+```
+
+**Terminal 2 (Client):**
+```bash
+ncrs localhost 8080 -O 4096 -v
+```
+
+Use `-I <BYTES>` to specify the size of the TCP receive buffer (`SO_RCVBUF`) and `-O <BYTES>` to specify the size of the TCP send buffer (`SO_SNDBUF`). This is useful for tuning network performance or testing specific buffer limits.
 
 ### Unix Domain Sockets (-U)
 

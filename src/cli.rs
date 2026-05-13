@@ -95,6 +95,14 @@ pub struct Args {
     #[arg(short = 'i', long = "interval", value_name = "SECONDS")]
     pub interval: Option<u64>,
 
+    /// [Flag: -I] Specify the size of the TCP receive buffer
+    #[arg(short = 'I', long = "recv-bytes", value_name = "BYTES")]
+    pub recv_bytes: Option<u32>,
+
+    /// [Flag: -O] Specify the size of the TCP send buffer in bytes
+    #[arg(short = 'O', long = "send-bytes", value_name = "BYTES")]
+    pub send_bytes: Option<u32>,
+
     /// [Flag: -U] Use Unix Domain Sockets
     #[arg(short = 'U', long = "unixsock")]
     pub unix: bool,
