@@ -83,6 +83,10 @@ pub struct Args {
     #[arg(short = 'd', long = "no-stdin")]
     pub no_stdin: bool,
 
+    /// [Flag: -D] Enable debugging on the socket
+    #[arg(short = 'D', long = "debug")]
+    pub debug: bool,
+
     /// [Flag: -q] Quit delay: after EOF on stdin, wait the specified number of seconds and then quit
     #[arg(short = 'q', long = "quit-delay", value_name = "SECONDS", allow_hyphen_values = true)]
     pub quit_delay: Option<i32>,

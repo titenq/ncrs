@@ -15,13 +15,19 @@ pub async fn run_unix_client(
     no_stdin: bool,
     quit_delay: Option<i32>,
     interval: Option<u64>,
+    debug: bool,
 ) -> anyhow::Result<()> {
     if verbose {
         eprintln!("{} Connecting to Unix socket {}...", "[*]".yellow(), path);
     }
 
     let stream = match UnixStream::connect(path).await {
-        Ok(s) => s,
+        Ok(s) => {
+            if debug {
+                let _ = crate::common::set_socket_debug(&s);
+            }
+            s
+        },
         Err(e) => {
             return Err(anyhow::anyhow!("Failed to connect to {}: {}", path, e));
         }
@@ -64,8 +70,9 @@ pub async fn run_unix_server(
     no_stdin: bool,
     quit_delay: Option<i32>,
     interval: Option<u64>,
+    debug: bool,
 ) -> anyhow::Result<()> {
-    let listener = bind_unix_listener(path)?;
+    let listener = bind_unix_listener(path, debug)?;
 
     let (stream, _) = listener.accept().await?;
 
@@ -106,8 +113,9 @@ pub async fn run_unix_server_persistent(
     no_stdin: bool,
     quit_delay: Option<i32>,
     interval: Option<u64>,
+    debug: bool,
 ) -> anyhow::Result<()> {
-    let listener = bind_unix_listener(path)?;
+    let listener = bind_unix_listener(path, debug)?;
     let (input_tx, _) = broadcast::channel(16);
     
     if !no_stdin {
@@ -139,12 +147,15 @@ pub async fn run_unix_server_persistent(
     }
 }
 
-fn bind_unix_listener(path: &str) -> anyhow::Result<UnixListener> {
+fn bind_unix_listener(path: &str, debug: bool) -> anyhow::Result<UnixListener> {
     if std::path::Path::new(path).exists() {
         std::fs::remove_file(path)?;
     }
 
     let listener = UnixListener::bind(path)?;
+    if debug {
+        let _ = crate::common::set_socket_debug(&listener);
+    }
     eprintln!("{} Listening on {}...", "[*]".yellow(), path);
     Ok(listener)
 }

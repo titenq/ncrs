@@ -74,6 +74,7 @@ async fn main() -> anyhow::Result<()> {
                         args.no_stdin,
                         args.quit_delay,
                         args.interval,
+                        args.debug,
                     )
                     .await?;
                 } else {
@@ -86,6 +87,7 @@ async fn main() -> anyhow::Result<()> {
                         args.no_stdin,
                         args.quit_delay,
                         args.interval,
+                        args.debug,
                     )
                     .await?;
                 }
@@ -99,6 +101,7 @@ async fn main() -> anyhow::Result<()> {
                     args.no_stdin,
                     args.quit_delay,
                     args.interval,
+                    args.debug,
                 )
                 .await?;
             }
@@ -127,6 +130,7 @@ async fn main() -> anyhow::Result<()> {
                 args.source_port,
                 args.numeric,
                 args.interval,
+                args.debug,
             )
             .await?;
         }
@@ -154,6 +158,7 @@ async fn main() -> anyhow::Result<()> {
             args.numeric,
             read_timeout,
             args.broadcast,
+            args.debug,
         )
         .await?;
     } else if args.listen {
@@ -184,6 +189,7 @@ async fn main() -> anyhow::Result<()> {
                 args.no_stdin,
                 args.quit_delay,
                 args.interval,
+                args.debug,
             )
             .await?;
         } else {
@@ -198,6 +204,7 @@ async fn main() -> anyhow::Result<()> {
                 args.no_stdin,
                 args.quit_delay,
                 args.interval,
+                args.debug,
             )
             .await?;
         }
@@ -218,6 +225,7 @@ async fn main() -> anyhow::Result<()> {
             args.no_stdin,
             args.quit_delay,
             args.interval,
+            args.debug,
         )
         .await?;
     } else {

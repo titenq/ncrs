@@ -18,6 +18,7 @@ pub async fn run_udp_node(
     numeric: bool,
     read_timeout: Option<std::time::Duration>,
     broadcast: bool,
+    debug: bool,
 ) -> anyhow::Result<()> {
     let addr = udp_bind_addr(listen, port, family, source_addr.as_deref(), source_port)?;
 
@@ -25,6 +26,10 @@ pub async fn run_udp_node(
 
     if broadcast {
         socket.set_broadcast(true)?;
+    }
+    
+    if debug {
+        let _ = crate::common::set_socket_debug(&socket);
     }
 
     let r_socket = Arc::new(socket);

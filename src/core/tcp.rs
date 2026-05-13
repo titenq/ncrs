@@ -20,10 +20,16 @@ pub(crate) async fn connect_tcp(
     source_addr: Option<&str>,
     source_port: Option<u16>,
     timeout_duration: std::time::Duration,
+    debug: bool,
 ) -> anyhow::Result<TcpStream> {
     if source_addr.is_none() && source_port.is_none() {
         return match tokio::time::timeout(timeout_duration, TcpStream::connect(target_addr)).await {
-            Ok(Ok(s)) => Ok(s),
+            Ok(Ok(s)) => {
+                if debug {
+                    let _ = crate::common::set_socket_debug(&s);
+                }
+                Ok(s)
+            },
             Ok(Err(e)) => Err(anyhow::anyhow!(
                 "Failed to connect to {}: {}",
                 target_addr,
@@ -54,6 +60,9 @@ pub(crate) async fn connect_tcp(
     } else {
         TcpSocket::new_v6()?
     };
+    if debug {
+        let _ = crate::common::set_socket_debug(&socket);
+    }
     let local_addr = SocketAddr::new(local_ip, source_port.unwrap_or(0));
     socket.bind(local_addr)?;
 
@@ -89,6 +98,7 @@ pub async fn run_client(
     no_stdin: bool,
     quit_delay: Option<i32>,
     interval: Option<u64>,
+    debug: bool,
 ) -> anyhow::Result<()> {
     let addr = format_endpoint(&target, port);
 
@@ -119,6 +129,7 @@ pub async fn run_client(
         source_addr.as_deref(),
         source_port,
         timeout_duration,
+        debug,
     )
     .await?;
 
@@ -205,8 +216,9 @@ pub async fn run_server(
     no_stdin: bool,
     quit_delay: Option<i32>,
     interval: Option<u64>,
+    debug: bool,
 ) -> anyhow::Result<()> {
-    let listener = bind_listener(port, family).await?;
+    let listener = bind_listener(port, family, debug).await?;
     let (stream, remote_addr) = listener.accept().await?;
 
     handle_server_stream(
@@ -235,8 +247,9 @@ pub async fn run_server_persistent(
     no_stdin: bool,
     quit_delay: Option<i32>,
     interval: Option<u64>,
+    debug: bool,
 ) -> anyhow::Result<()> {
-    let listener = bind_listener(port, family).await?;
+    let listener = bind_listener(port, family, debug).await?;
     let (input_tx, _) = broadcast::channel(16);
     if !no_stdin {
         spawn_stdin_forwarder(input_tx.clone(), crlf);
@@ -266,13 +279,16 @@ pub async fn run_server_persistent(
     }
 }
 
-async fn bind_listener(port: u16, family: AddressFamily) -> anyhow::Result<TcpListener> {
+async fn bind_listener(port: u16, family: AddressFamily, debug: bool) -> anyhow::Result<TcpListener> {
     let addr = match family {
         AddressFamily::Any | AddressFamily::Ipv4 => format!("0.0.0.0:{}", port),
         AddressFamily::Ipv6 => format!("[::]:{}", port),
     };
 
     let listener = TcpListener::bind(&addr).await?;
+    if debug {
+        let _ = crate::common::set_socket_debug(&listener);
+    }
     eprintln!("{} Listening on {}...", "[*]".yellow(), addr);
     Ok(listener)
 }

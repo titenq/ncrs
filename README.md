@@ -26,6 +26,7 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 - Interval delay for throttling data and port scanning with `-i`.
 - Unix Domain Sockets support with `-U` (cross-platform safe, Unix-only execution).
 - Allow broadcast (SO_BROADCAST) on the socket with `-b`.
+- Enable debugging (SO_DEBUG) on the socket with `-D`.
 - Verbose mode with `-v` to print detailed connection info.
 - Silent execution by default (logs directed to stderr) for safe data piping.
 - Optional TLS mode with `--tls`.
@@ -54,6 +55,7 @@ Options:
   -4, --ipv4                     Force IPv4
   -6, --ipv6                     Force IPv6
   -b, --broadcast                Allow broadcast (SO_BROADCAST) on the socket
+  -D, --debug                    Enable debugging on the socket
   -C, --crlf                     Send CRLF as line-ending
   -d, --no-stdin                 Do not attempt to read from stdin
   -i, --interval <SECONDS>       Interval delay: delay between lines of text and port scan connections
@@ -70,7 +72,7 @@ Important differences from OpenBSD `nc`:
 
 - `--tls` is an `ncrs` extension and is not an OpenBSD `nc` flag.
 - `--tls-gen` and `--tls-gen-force` are `ncrs` extensions and are not OpenBSD `nc` flags.
-- OpenBSD options such as `-D`, `-F`, `-I`, `-M`, `-m`, `-O`, `-P`, `-r`, `-S`, `-T`, `-t`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
+- OpenBSD options such as `-F`, `-I`, `-M`, `-m`, `-O`, `-P`, `-r`, `-S`, `-T`, `-t`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
 
 ## Requirements
 
@@ -172,6 +174,20 @@ ncrs 255.255.255.255 8080 -u -b -v
 ```
 
 Use `-b` to allow sending UDP packets to network broadcast addresses. Any device on your local network listening on that port will receive the messages.
+
+### Debug (-D)
+
+**Terminal 1 (Server):**
+```bash
+ncrs -l 8080 -D -v
+```
+
+**Terminal 2 (Client):**
+```bash
+ncrs localhost 8080 -D -v
+```
+
+Use `-D` to enable debugging on the socket (`SO_DEBUG`). Note that actual debugging output depends on the underlying operating system and network stack configuration (and often requires root privileges).
 
 ### Port Scan
 
@@ -433,7 +449,6 @@ Do not commit `key.pem` if you generate TLS files in a project directory.
 ```text
 ncrs/
 ├── src/
-│   ├── cli.rs
 │   ├── common/
 │   │   └── mod.rs
 │   ├── core/
@@ -442,7 +457,9 @@ ncrs/
 │   │   ├── mod.rs
 │   │   ├── scan.rs
 │   │   ├── tcp.rs
-│   │   └── udp.rs
+│   │   ├── udp.rs
+│   │   └── unix.rs
+│   ├── cli.rs
 │   ├── main.rs
 │   └── tls.rs
 ├── Cargo.lock
