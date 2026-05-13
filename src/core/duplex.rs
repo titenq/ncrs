@@ -1,11 +1,11 @@
 use tokio::io::{self, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::broadcast;
 
-pub(crate) async fn handle_duplex<S>(stream: S, crlf: bool, shutdown_on_eof: bool) -> anyhow::Result<()>
+pub(crate) async fn handle_duplex<S>(stream: S, crlf: bool, shutdown_on_eof: bool, no_stdin: bool) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    handle_duplex_inner(stream, crlf, None, shutdown_on_eof).await
+    handle_duplex_inner(stream, crlf, None, shutdown_on_eof, no_stdin).await
 }
 
 pub(crate) async fn handle_duplex_with_timeout<S>(
@@ -13,11 +13,12 @@ pub(crate) async fn handle_duplex_with_timeout<S>(
     crlf: bool,
     timeout_duration: std::time::Duration,
     shutdown_on_eof: bool,
+    no_stdin: bool,
 ) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    handle_duplex_inner(stream, crlf, Some(timeout_duration), shutdown_on_eof).await
+    handle_duplex_inner(stream, crlf, Some(timeout_duration), shutdown_on_eof, no_stdin).await
 }
 
 async fn handle_duplex_inner<S>(
@@ -25,6 +26,7 @@ async fn handle_duplex_inner<S>(
     crlf: bool,
     read_timeout: Option<std::time::Duration>,
     shutdown_on_eof: bool,
+    no_stdin: bool,
 ) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -32,6 +34,11 @@ where
     let (mut reader, mut writer) = io::split(stream);
 
     let stdin_to_socket = tokio::spawn(async move {
+        if no_stdin {
+            std::future::pending::<()>().await;
+            return anyhow::Ok(());
+        }
+
         let mut stdin = io::stdin();
         let mut buf = [0u8; 1024];
 

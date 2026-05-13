@@ -14,14 +14,14 @@ async fn main() -> anyhow::Result<()> {
 
     if args.verbose {
         if let Some(figure) = FIGfont::standard().unwrap().convert("ncrs") {
-            println!("{}", figure.to_string().cyan().bold());
+            eprintln!("{}", figure.to_string().cyan().bold());
         }
     }
 
     if args.tls_gen || args.tls_gen_force {
         tls::generate_self_signed_cert(args.tls_gen_force)?;
         let paths = tls::config_tls_paths()?;
-        println!(
+        eprintln!(
             "{} Generated {} and {}",
             "[+]".green(),
             paths.cert.display(),
@@ -102,7 +102,7 @@ async fn main() -> anyhow::Result<()> {
 
         if args.keep_alive {
             if args.verbose {
-                println!(
+                eprintln!(
                     "{} Persistent mode active (-k). Listener will keep accepting connections.",
                     "[*]".blue()
                 );
@@ -115,6 +115,7 @@ async fn main() -> anyhow::Result<()> {
                 args.crlf,
                 read_timeout,
                 args.shutdown_on_eof,
+                args.no_stdin,
             )
             .await?;
         } else {
@@ -126,6 +127,7 @@ async fn main() -> anyhow::Result<()> {
                 args.crlf,
                 read_timeout,
                 args.shutdown_on_eof,
+                args.no_stdin,
             )
             .await?;
         }
@@ -143,6 +145,7 @@ async fn main() -> anyhow::Result<()> {
             args.numeric,
             read_timeout,
             args.shutdown_on_eof,
+            args.no_stdin,
         )
         .await?;
     } else {

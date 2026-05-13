@@ -26,9 +26,9 @@ pub async fn run_udp_node(
 
     if verbose {
         if listen {
-            println!("{} UDP listening on port {}", "[*]".yellow(), port);
+            eprintln!("{} UDP listening on port {}", "[*]".yellow(), port);
         } else {
-            println!(
+            eprintln!(
                 "{} UDP socket bound to local port {}",
                 "[*]".yellow(),
                 r_socket.local_addr()?.port()
@@ -44,7 +44,7 @@ pub async fn run_udp_node(
         io::stdout().flush().await?;
 
         if verbose {
-            println!("\n{} UDP packet received from {}", "[+]".green(), peer);
+            eprintln!("\n{} UDP packet received from {}", "[+]".green(), peer);
         }
 
         tokio::select! {

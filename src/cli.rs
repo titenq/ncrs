@@ -74,4 +74,8 @@ pub struct Args {
     /// [Flag: -N] shutdown the network socket after EOF on stdin
     #[arg(short = 'N', long = "shutdown-on-eof")]
     pub shutdown_on_eof: bool,
+
+    /// [Flag: -d] Do not attempt to read from stdin
+    #[arg(short = 'd', long = "no-stdin")]
+    pub no_stdin: bool,
 }

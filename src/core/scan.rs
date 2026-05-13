@@ -22,7 +22,7 @@ pub async fn run_port_scan(
     let mut handles = vec![];
 
     if verbose {
-        println!(
+        eprintln!(
             "{} Scanning {} ports on {}...",
             "[*]".yellow(),
             ports.len(),
@@ -41,7 +41,7 @@ pub async fn run_port_scan(
                     .is_ok()
                 {
                     if verbose {
-                        println!("{} port {} open", "Connection to".green(), port);
+                        eprintln!("{} port {} open", "Connection to".green(), port);
                     }
                 }
             }
@@ -53,7 +53,7 @@ pub async fn run_port_scan(
     }
 
     if verbose {
-        println!("{} Scan complete.", "[*]".yellow());
+        eprintln!("{} Scan complete.", "[*]".yellow());
     }
 
     Ok(())

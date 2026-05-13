@@ -86,29 +86,30 @@ pub async fn run_client(
     numeric: bool,
     read_timeout: Option<std::time::Duration>,
     shutdown_on_eof: bool,
+    no_stdin: bool,
 ) -> anyhow::Result<()> {
     let addr = format_endpoint(&target, port);
 
     if verbose {
         let mode = if numeric { "numeric" } else { family.label() };
-        println!("{} [{}] Connecting to {}...", "[*]".yellow(), mode, addr);
+        eprintln!("{} [{}] Connecting to {}...", "[*]".yellow(), mode, addr);
     }
 
     let timeout_duration = std::time::Duration::from_secs(timeout_secs);
 
     if verbose && !numeric {
-        println!("{} Resolving address...", "[*]".yellow());
+        eprintln!("{} Resolving address...", "[*]".yellow());
     }
 
     let target_addr = resolve_address(&target, port, family, timeout_duration, numeric).await?;
 
     if verbose {
         if numeric {
-            println!("{} Using numeric address: {}", "[*]".yellow(), target_addr);
+            eprintln!("{} Using numeric address: {}", "[*]".yellow(), target_addr);
         } else {
-            println!("{} Resolved to: {}", "[*]".yellow(), target_addr);
+            eprintln!("{} Resolved to: {}", "[*]".yellow(), target_addr);
         }
-        println!("{} Connecting...", "[*]".yellow());
+        eprintln!("{} Connecting...", "[*]".yellow());
     }
 
     let stream = connect_tcp(
@@ -143,16 +144,16 @@ pub async fn run_client(
 
         print_connected(verbose, crlf);
         if let Some(timeout_duration) = read_timeout {
-            handle_duplex_with_timeout(tls_stream, crlf, timeout_duration, shutdown_on_eof).await
+            handle_duplex_with_timeout(tls_stream, crlf, timeout_duration, shutdown_on_eof, no_stdin).await
         } else {
-            handle_duplex(tls_stream, crlf, shutdown_on_eof).await
+            handle_duplex(tls_stream, crlf, shutdown_on_eof, no_stdin).await
         }
     } else {
         print_connected(verbose, crlf);
         if let Some(timeout_duration) = read_timeout {
-            handle_duplex_with_timeout(stream, crlf, timeout_duration, shutdown_on_eof).await
+            handle_duplex_with_timeout(stream, crlf, timeout_duration, shutdown_on_eof, no_stdin).await
         } else {
-            handle_duplex(stream, crlf, shutdown_on_eof).await
+            handle_duplex(stream, crlf, shutdown_on_eof, no_stdin).await
         }
     }
 }
@@ -165,11 +166,12 @@ pub async fn run_server(
     crlf: bool,
     read_timeout: Option<std::time::Duration>,
     shutdown_on_eof: bool,
+    no_stdin: bool,
 ) -> anyhow::Result<()> {
     let listener = bind_listener(port, family).await?;
     let (stream, remote_addr) = listener.accept().await?;
 
-    handle_server_stream(stream, remote_addr, verbose, tls, crlf, read_timeout, shutdown_on_eof).await
+    handle_server_stream(stream, remote_addr, verbose, tls, crlf, read_timeout, shutdown_on_eof, no_stdin).await
 }
 
 pub async fn run_server_persistent(
@@ -180,10 +182,13 @@ pub async fn run_server_persistent(
     crlf: bool,
     read_timeout: Option<std::time::Duration>,
     shutdown_on_eof: bool,
+    no_stdin: bool,
 ) -> anyhow::Result<()> {
     let listener = bind_listener(port, family).await?;
     let (input_tx, _) = broadcast::channel(16);
-    spawn_stdin_forwarder(input_tx.clone(), crlf);
+    if !no_stdin {
+        spawn_stdin_forwarder(input_tx.clone(), crlf);
+    }
 
     loop {
         let (stream, remote_addr) = listener.accept().await?;
@@ -214,7 +219,7 @@ async fn bind_listener(port: u16, family: AddressFamily) -> anyhow::Result<TcpLi
     };
 
     let listener = TcpListener::bind(&addr).await?;
-    println!("{} Listening on {}...", "[*]".yellow(), addr);
+    eprintln!("{} Listening on {}...", "[*]".yellow(), addr);
     Ok(listener)
 }
 
@@ -226,14 +231,15 @@ async fn handle_server_stream(
     crlf: bool,
     read_timeout: Option<std::time::Duration>,
     shutdown_on_eof: bool,
+    no_stdin: bool,
 ) -> anyhow::Result<()> {
     if verbose {
-        println!("{} Connection from {}", "[+]".green(), remote_addr);
+        eprintln!("{} Connection from {}", "[+]".green(), remote_addr);
     }
 
     if tls {
         if verbose {
-            println!("{} Loading certificates and private key...", "[*]".yellow());
+            eprintln!("{} Loading certificates and private key...", "[*]".yellow());
         }
 
         let tls_paths = tls::resolve_server_tls_paths()?;
@@ -253,25 +259,25 @@ async fn handle_server_stream(
         let acceptor = TlsAcceptor::from(Arc::new(config));
 
         if verbose {
-            println!("{} Waiting for TLS handshake...", "[*]".yellow());
+            eprintln!("{} Waiting for TLS handshake...", "[*]".yellow());
         }
 
         let tls_stream = acceptor.accept(stream).await?;
 
         if verbose {
-            println!("{} TLS Handshake successful!", "[+]".green());
+            eprintln!("{} TLS Handshake successful!", "[+]".green());
         }
 
         if let Some(timeout_duration) = read_timeout {
-            handle_duplex_with_timeout(tls_stream, crlf, timeout_duration, shutdown_on_eof).await
+            handle_duplex_with_timeout(tls_stream, crlf, timeout_duration, shutdown_on_eof, no_stdin).await
         } else {
-            handle_duplex(tls_stream, crlf, shutdown_on_eof).await
+            handle_duplex(tls_stream, crlf, shutdown_on_eof, no_stdin).await
         }
     } else {
         if let Some(timeout_duration) = read_timeout {
-            handle_duplex_with_timeout(stream, crlf, timeout_duration, shutdown_on_eof).await
+            handle_duplex_with_timeout(stream, crlf, timeout_duration, shutdown_on_eof, no_stdin).await
         } else {
-            handle_duplex(stream, crlf, shutdown_on_eof).await
+            handle_duplex(stream, crlf, shutdown_on_eof, no_stdin).await
         }
     }
 }
@@ -286,12 +292,12 @@ async fn handle_server_stream_with_input(
     shutdown_on_eof: bool,
 ) -> anyhow::Result<()> {
     if verbose {
-        println!("{} Connection from {}", "[+]".green(), remote_addr);
+        eprintln!("{} Connection from {}", "[+]".green(), remote_addr);
     }
 
     if tls {
         if verbose {
-            println!("{} Loading certificates and private key...", "[*]".yellow());
+            eprintln!("{} Loading certificates and private key...", "[*]".yellow());
         }
 
         let tls_paths = tls::resolve_server_tls_paths()?;
@@ -311,13 +317,13 @@ async fn handle_server_stream_with_input(
         let acceptor = TlsAcceptor::from(Arc::new(config));
 
         if verbose {
-            println!("{} Waiting for TLS handshake...", "[*]".yellow());
+            eprintln!("{} Waiting for TLS handshake...", "[*]".yellow());
         }
 
         let tls_stream = acceptor.accept(stream).await?;
 
         if verbose {
-            println!("{} TLS Handshake successful!", "[+]".green());
+            eprintln!("{} TLS Handshake successful!", "[+]".green());
         }
 
         handle_duplex_with_input(tls_stream, input_rx, read_timeout, shutdown_on_eof).await
@@ -354,17 +360,17 @@ fn print_connected(verbose: bool, crlf: bool) {
         return;
     }
 
-    println!(
+    eprintln!(
         "{} Connected! Type your messages and press Enter.",
         "[+]".green()
     );
 
     if crlf {
-        println!(
+        eprintln!(
             "{} CRLF mode active (-C): line endings typed as LF are sent as CRLF.",
             "[*]".blue()
         );
-        println!(
+        eprintln!(
             "{} For HTTP, finish headers with an empty line.",
             "[*]".blue()
         );

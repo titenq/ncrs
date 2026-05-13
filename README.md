@@ -46,6 +46,7 @@ Options:
   -4, --ipv4                     Force IPv4
   -6, --ipv6                     Force IPv6
   -C, --crlf                     Send CRLF as line-ending
+  -d, --no-stdin                 Do not attempt to read from stdin
   -k, --keep-alive               Keep accepting sequential inbound connections
   -N, --shutdown-on-eof          Shutdown the network socket after EOF on stdin
       --tls                      ncrs extension: use TLS for the connection
@@ -57,7 +58,7 @@ Important differences from OpenBSD `nc`:
 
 - `--tls` is an `ncrs` extension and is not an OpenBSD `nc` flag.
 - `--tls-gen` and `--tls-gen-force` are `ncrs` extensions and are not OpenBSD `nc` flags.
-- OpenBSD options such as `-b`, `-D`, `-d`, `-F`, `-h`, `-I`, `-i`, `-M`, `-m`, `-O`, `-P`, `-q`, `-r`, `-S`, `-T`, `-t`, `-U`, `-V`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
+- OpenBSD options such as `-b`, `-D`, `-F`, `-h`, `-I`, `-i`, `-M`, `-m`, `-O`, `-P`, `-q`, `-r`, `-S`, `-T`, `-t`, `-U`, `-V`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
 
 ## Requirements
 
@@ -267,6 +268,30 @@ GET / HTTP/1.0
 ```
 
 Use `-N` to instruct `ncrs` to close the sending half of the connection immediately after it finishes reading from standard input. This is very useful in shell scripts or when sending EOF manually, preventing `ncrs` from hanging forever waiting for the server to close the connection.
+
+### Run in Background (No Stdin)
+
+When running `ncrs` in the background (using `&`), the operating system may suspend the process if it tries to read from the terminal (`stdin`). Use `-d` to disable `stdin` reading.
+
+**Terminal 1 (Server in Background):**
+```bash
+ncrs -l 8080 -d > received_data.txt &
+```
+*Note: Because it's running in the background, your terminal prompt will return immediately. Any text you type now goes to your shell, not to `ncrs`.*
+
+**Terminal 2 (Client):**
+Send data to the background server from another terminal:
+```bash
+echo "Secret message over the network!" | ncrs localhost 8080
+```
+
+**Back to Terminal 1:**
+Check the contents of the file to see the received data:
+```bash
+cat received_data.txt
+```
+
+With `-d`, `ncrs` will solely receive data from the network without expecting or reading any input from your keyboard, making it perfect for silent daemon-like execution.
 
 ## TLS Mode
 
