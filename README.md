@@ -47,6 +47,7 @@ Options:
   -6, --ipv6                     Force IPv6
   -C, --crlf                     Send CRLF as line-ending
   -k, --keep-alive               Keep accepting sequential inbound connections
+  -N, --shutdown-on-eof          Shutdown the network socket after EOF on stdin
       --tls                      ncrs extension: use TLS for the connection
       --tls-gen                  ncrs extension: generate TLS files in ~/.config/ncrs
       --tls-gen-force            ncrs extension: generate and overwrite TLS files
@@ -56,7 +57,7 @@ Important differences from OpenBSD `nc`:
 
 - `--tls` is an `ncrs` extension and is not an OpenBSD `nc` flag.
 - `--tls-gen` and `--tls-gen-force` are `ncrs` extensions and are not OpenBSD `nc` flags.
-- OpenBSD options such as `-b`, `-D`, `-d`, `-F`, `-h`, `-I`, `-i`, `-M`, `-m`, `-N`, `-O`, `-P`, `-q`, `-r`, `-S`, `-T`, `-t`, `-U`, `-V`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
+- OpenBSD options such as `-b`, `-D`, `-d`, `-F`, `-h`, `-I`, `-i`, `-M`, `-m`, `-O`, `-P`, `-q`, `-r`, `-S`, `-T`, `-t`, `-U`, `-V`, `-W`, `-X`, `-x`, and `-Z` are not implemented yet.
 
 ## Requirements
 
@@ -244,6 +245,28 @@ Connection: close
 ```
 
 The empty line finishes the HTTP headers.
+
+### Shutdown on EOF
+
+For automated scripts using pipes:
+
+```bash
+echo -e "GET / HTTP/1.0\r\n\r\n" | ncrs google.com 80 -v -N
+```
+
+For manual usage, run:
+
+```bash
+ncrs google.com 80 -v -C -N
+```
+
+After connecting, type your request and press `Ctrl+D` (EOF):
+
+```text
+GET / HTTP/1.0
+```
+
+Use `-N` to instruct `ncrs` to close the sending half of the connection immediately after it finishes reading from standard input. This is very useful in shell scripts or when sending EOF manually, preventing `ncrs` from hanging forever waiting for the server to close the connection.
 
 ## TLS Mode
 

@@ -1,28 +1,30 @@
 use tokio::io::{self, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::broadcast;
 
-pub(crate) async fn handle_duplex<S>(stream: S, crlf: bool) -> anyhow::Result<()>
+pub(crate) async fn handle_duplex<S>(stream: S, crlf: bool, shutdown_on_eof: bool) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    handle_duplex_inner(stream, crlf, None).await
+    handle_duplex_inner(stream, crlf, None, shutdown_on_eof).await
 }
 
 pub(crate) async fn handle_duplex_with_timeout<S>(
     stream: S,
     crlf: bool,
     timeout_duration: std::time::Duration,
+    shutdown_on_eof: bool,
 ) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    handle_duplex_inner(stream, crlf, Some(timeout_duration)).await
+    handle_duplex_inner(stream, crlf, Some(timeout_duration), shutdown_on_eof).await
 }
 
 async fn handle_duplex_inner<S>(
     stream: S,
     crlf: bool,
     read_timeout: Option<std::time::Duration>,
+    shutdown_on_eof: bool,
 ) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -49,7 +51,9 @@ where
             writer.flush().await?;
         }
 
-        writer.shutdown().await?;
+        if shutdown_on_eof {
+            writer.shutdown().await?;
+        }
         anyhow::Ok(())
     });
 
@@ -113,6 +117,7 @@ pub(crate) async fn handle_duplex_with_input<S>(
     stream: S,
     mut input_rx: broadcast::Receiver<Vec<u8>>,
     read_timeout: Option<std::time::Duration>,
+    shutdown_on_eof: bool,
 ) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -148,7 +153,9 @@ where
                     }
                     Err(broadcast::error::RecvError::Lagged(_)) => {}
                     Err(broadcast::error::RecvError::Closed) => {
-                        writer.shutdown().await?;
+                        if shutdown_on_eof {
+                            writer.shutdown().await?;
+                        }
                         socket_to_stdout.await??;
                         return Ok(());
                     }

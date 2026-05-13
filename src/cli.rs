@@ -70,4 +70,8 @@ pub struct Args {
     /// [Flag: -k] Keep-alive: accept multiple connections in listen mode
     #[arg(short = 'k', long)]
     pub keep_alive: bool,
+
+    /// [Flag: -N] shutdown the network socket after EOF on stdin
+    #[arg(short = 'N', long = "shutdown-on-eof")]
+    pub shutdown_on_eof: bool,
 }

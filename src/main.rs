@@ -112,6 +112,7 @@ async fn main() -> anyhow::Result<()> {
                 family,
                 args.crlf,
                 read_timeout,
+                args.shutdown_on_eof,
             )
             .await?;
         } else {
@@ -122,6 +123,7 @@ async fn main() -> anyhow::Result<()> {
                 family,
                 args.crlf,
                 read_timeout,
+                args.shutdown_on_eof,
             )
             .await?;
         }
@@ -138,6 +140,7 @@ async fn main() -> anyhow::Result<()> {
             args.source_port,
             args.numeric,
             read_timeout,
+            args.shutdown_on_eof,
         )
         .await?;
     } else {
