@@ -34,6 +34,7 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 - Change the IPv4 Type of Service (TOS) or IPv6 Traffic Class with `-T`.
 - Verbose mode with `-v` to print detailed connection info.
 - Silent execution by default (logs directed to stderr) for safe data piping.
+- Telnet negotiation handling with `-t` to answer RFC 854 requests automatically.
 - Proxy support for TCP connections via SOCKS4, SOCKS5, and HTTP CONNECT with `-x`, `-X`, and `-P`.
 - Optional TLS mode with `--tls`.
 - Local TLS certificate generation with `--tls-gen` and `--tls-gen-force`.
@@ -62,6 +63,7 @@ Options:
   -6, --ipv6                     Force IPv6
   -b, --broadcast                Allow broadcast (SO_BROADCAST) on the socket
   -D, --debug                    Enable debugging on the socket
+  -t, --telnet                   Answer RFC 854 DON'T and WON'T to RFC 854 DO and WILL requests
   -M, --ttl <TTL>                Set the TTL / hop limit of outgoing packets
   -T, --tos <KEYWORD>            Change IPv4 TOS or IPv6 traffic class value
   -C, --crlf                     Send CRLF as line-ending
@@ -87,7 +89,7 @@ Important differences from OpenBSD `nc`:
 
 - `--tls` is an `ncrs` extension and is not an OpenBSD `nc` flag.
 - `--tls-gen` and `--tls-gen-force` are `ncrs` extensions and are not OpenBSD `nc` flags.
-- OpenBSD options such as `-F`, `-m`, `-S`, `-t`, and `-Z` are not implemented yet.
+- OpenBSD options such as `-F`, `-m`, `-S`, and `-Z` are not implemented yet.
 
 ## Requirements
 
@@ -472,16 +474,26 @@ ncrs -x 10.2.3.4:8080 -X connect -P myusername:mypassword example.com 80 -v
 
 *Note: Proxy support is only available for outbound TCP connections. It cannot be used with listen (`-l`), UDP (`-u`), Unix sockets (`-U`), or custom source addresses (`-s`).*
 
-## Routing and Traffic Control
+### Telnet Negotiation (-t)
 
-`ncrs` exposes several low-level IP configurations for network troubleshooting:
+`ncrs` can automatically respond to Telnet negotiation requests (RFC 854). This is useful when interacting with services that expect initial Telnet handshakes before establishing a raw text connection.
 
-**Time To Live (-M)**: Use `-M <ttl>` to set the IP TTL (or IPv6 hop limit) of outgoing packets. Useful for testing routing and firewall limits.
+```bash
+ncrs telehack.com 23 -t -v
+```
+
+Use `-t` to answer RFC 854 `DO` and `WILL` requests with `DON'T` and `WON'T`, preventing the connection from hanging due to unhandled negotiation bytes.
+
+### Time To Live (-M)
+
+Use `-M <ttl>` to set the IP TTL (or IPv6 hop limit) of outgoing packets. Useful for testing routing and firewall limits.
 ```bash
 ncrs example.com 80 -M 5 -v
 ```
 
-**Type of Service (-T)**: Use `-T <keyword>` to change the IPv4 TOS or IPv6 Traffic Class. You can use hexadecimal values (e.g., `0x10`) or OpenBSD `nc` keywords like `critical`, `inetcontrol`, `lowcost`, `lowdelay`, `netcontrol`, `throughput`, or `reliability`.
+### Type of Service (-T)
+
+Use `-T <keyword>` to change the IPv4 TOS or IPv6 Traffic Class. You can use hexadecimal values (e.g., `0x10`) or OpenBSD `nc` keywords like `critical`, `inetcontrol`, `lowcost`, `lowdelay`, `netcontrol`, `throughput`, or `reliability`.
 ```bash
 ncrs example.com 80 -T lowdelay -v
 ```

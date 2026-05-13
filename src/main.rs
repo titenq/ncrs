@@ -233,6 +233,7 @@ async fn main() -> anyhow::Result<()> {
                 args.recv_limit,
                 args.ttl,
                 parsed_tos,
+                args.telnet,
             )
             .await?;
         } else {
@@ -253,6 +254,7 @@ async fn main() -> anyhow::Result<()> {
                 args.recv_limit,
                 args.ttl,
                 parsed_tos,
+                args.telnet,
             )
             .await?;
         }
@@ -282,6 +284,7 @@ async fn main() -> anyhow::Result<()> {
             args.proxy_username,
             args.ttl,
             parsed_tos,
+            args.telnet,
         )
         .await?;
     } else {

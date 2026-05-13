@@ -75,6 +75,10 @@ pub struct Args {
     #[arg(short = 'D', long = "debug")]
     pub debug: bool,
 
+    /// [Flag: -t] Answer RFC 854 DON'T and WON'T to RFC 854 DO and WILL requests
+    #[arg(short = 't', long = "telnet")]
+    pub telnet: bool,
+
     /// [Flag: -q] Quit delay: after EOF on stdin, wait the specified number of seconds and then quit
     #[arg(short = 'q', long = "quit-delay", value_name = "SECONDS", allow_hyphen_values = true)]
     pub quit_delay: Option<i32>,

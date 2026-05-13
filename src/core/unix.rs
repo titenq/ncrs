@@ -48,6 +48,7 @@ pub async fn run_unix_client(
             quit_delay,
             interval,
             recv_limit,
+            false,
         )
         .await
     } else {
@@ -59,6 +60,7 @@ pub async fn run_unix_client(
             quit_delay,
             interval,
             recv_limit,
+            false,
         )
         .await
     }
@@ -94,6 +96,7 @@ pub async fn run_unix_server(
             quit_delay,
             interval,
             recv_limit,
+            false,
         )
         .await
     } else {
@@ -105,6 +108,7 @@ pub async fn run_unix_server(
             quit_delay,
             interval,
             recv_limit,
+            false,
         )
         .await
     }
@@ -145,6 +149,7 @@ pub async fn run_unix_server_persistent(
             quit_delay,
             interval,
             recv_limit,
+            false,
         )
         .await
         {

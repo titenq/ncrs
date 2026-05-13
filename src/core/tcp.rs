@@ -48,11 +48,11 @@ pub(crate) async fn connect_tcp(
     if debug {
         let _ = crate::common::set_socket_debug(&socket);
     }
-    
+
     if let Some(size) = recv_bytes {
         socket.set_recv_buffer_size(size)?;
     }
-    
+
     if let Some(size) = send_bytes {
         socket.set_send_buffer_size(size)?;
     }
@@ -117,6 +117,7 @@ pub async fn run_client(
     proxy_username: Option<String>,
     ttl: Option<u32>,
     tos: Option<u8>,
+    telnet: bool,
 ) -> anyhow::Result<()> {
     let addr = format_endpoint(&target, port);
 
@@ -193,6 +194,7 @@ pub async fn run_client(
         let tls_stream = connector.connect(domain, stream).await?;
 
         print_connected(verbose, crlf);
+
         if let Some(timeout_duration) = read_timeout {
             handle_duplex_with_timeout(
                 tls_stream,
@@ -203,6 +205,7 @@ pub async fn run_client(
                 quit_delay,
                 interval,
                 recv_limit,
+                telnet,
             )
             .await
         } else {
@@ -214,6 +217,7 @@ pub async fn run_client(
                 quit_delay,
                 interval,
                 recv_limit,
+                telnet,
             )
             .await
         }
@@ -229,6 +233,7 @@ pub async fn run_client(
                 quit_delay,
                 interval,
                 recv_limit,
+                telnet,
             )
             .await
         } else {
@@ -240,6 +245,7 @@ pub async fn run_client(
                 quit_delay,
                 interval,
                 recv_limit,
+                telnet,
             )
             .await
         }
@@ -263,6 +269,7 @@ pub async fn run_server(
     recv_limit: Option<u32>,
     ttl: Option<u32>,
     tos: Option<u8>,
+    telnet: bool,
 ) -> anyhow::Result<()> {
     let listener = bind_listener(port, family, debug, recv_bytes, send_bytes, ttl, tos).await?;
     let (stream, remote_addr) = listener.accept().await?;
@@ -279,6 +286,7 @@ pub async fn run_server(
         quit_delay,
         interval,
         recv_limit,
+        telnet,
     )
     .await
 }
@@ -300,6 +308,7 @@ pub async fn run_server_persistent(
     recv_limit: Option<u32>,
     ttl: Option<u32>,
     tos: Option<u8>,
+    telnet: bool,
 ) -> anyhow::Result<()> {
     let listener = bind_listener(port, family, debug, recv_bytes, send_bytes, ttl, tos).await?;
     let (input_tx, _) = broadcast::channel(16);
@@ -322,6 +331,7 @@ pub async fn run_server_persistent(
             quit_delay,
             interval,
             recv_limit,
+            telnet,
         )
         .await
         {
@@ -332,7 +342,15 @@ pub async fn run_server_persistent(
     }
 }
 
-async fn bind_listener(port: u16, family: AddressFamily, debug: bool, recv_bytes: Option<u32>, send_bytes: Option<u32>, ttl: Option<u32>, tos: Option<u8>) -> anyhow::Result<TcpListener> {
+async fn bind_listener(
+    port: u16,
+    family: AddressFamily,
+    debug: bool,
+    recv_bytes: Option<u32>,
+    send_bytes: Option<u32>,
+    ttl: Option<u32>,
+    tos: Option<u8>,
+) -> anyhow::Result<TcpListener> {
     let addr = match family {
         AddressFamily::Any | AddressFamily::Ipv4 => format!("0.0.0.0:{}", port),
         AddressFamily::Ipv6 => format!("[::]:{}", port),
@@ -347,17 +365,17 @@ async fn bind_listener(port: u16, family: AddressFamily, debug: bool, recv_bytes
     if debug {
         let _ = crate::common::set_socket_debug(&socket);
     }
-    
+
     if let Some(size) = recv_bytes {
         socket.set_recv_buffer_size(size)?;
     }
-    
+
     if let Some(size) = send_bytes {
         socket.set_send_buffer_size(size)?;
     }
-    
+
     let is_ipv4 = !matches!(family, AddressFamily::Ipv6);
-    
+
     if let Some(t) = ttl {
         let _ = crate::common::set_socket_ttl(&socket, t, is_ipv4);
     }
@@ -365,9 +383,9 @@ async fn bind_listener(port: u16, family: AddressFamily, debug: bool, recv_bytes
     if let Some(t) = tos {
         let _ = crate::common::set_socket_tos(&socket, t, is_ipv4);
     }
-    
+
     socket.set_reuseaddr(true)?;
-    
+
     let local_addr = addr.parse::<SocketAddr>()?;
     socket.bind(local_addr)?;
     let listener = socket.listen(1024)?;
@@ -377,7 +395,7 @@ async fn bind_listener(port: u16, family: AddressFamily, debug: bool, recv_bytes
     } else {
         eprintln!("{} Listening on {}...", "[*]".yellow(), addr);
     }
-    
+
     Ok(listener)
 }
 
@@ -393,6 +411,7 @@ async fn handle_server_stream(
     quit_delay: Option<i32>,
     interval: Option<u64>,
     recv_limit: Option<u32>,
+    telnet: bool,
 ) -> anyhow::Result<()> {
     if verbose {
         eprintln!("{} Connection from {}", "[+]".green(), remote_addr);
@@ -439,6 +458,7 @@ async fn handle_server_stream(
                 quit_delay,
                 interval,
                 recv_limit,
+                telnet,
             )
             .await
         } else {
@@ -450,6 +470,7 @@ async fn handle_server_stream(
                 quit_delay,
                 interval,
                 recv_limit,
+                telnet,
             )
             .await
         }
@@ -464,6 +485,7 @@ async fn handle_server_stream(
                 quit_delay,
                 interval,
                 recv_limit,
+                telnet,
             )
             .await
         } else {
@@ -475,6 +497,7 @@ async fn handle_server_stream(
                 quit_delay,
                 interval,
                 recv_limit,
+                telnet,
             )
             .await
         }
@@ -492,6 +515,7 @@ async fn handle_server_stream_with_input(
     quit_delay: Option<i32>,
     interval: Option<u64>,
     recv_limit: Option<u32>,
+    telnet: bool,
 ) -> anyhow::Result<()> {
     if verbose {
         eprintln!("{} Connection from {}", "[+]".green(), remote_addr);
@@ -536,6 +560,7 @@ async fn handle_server_stream_with_input(
             quit_delay,
             interval,
             recv_limit,
+            telnet,
         )
         .await
     } else {
@@ -547,6 +572,7 @@ async fn handle_server_stream_with_input(
             quit_delay,
             interval,
             recv_limit,
+            telnet,
         )
         .await
     }
