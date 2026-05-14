@@ -38,6 +38,10 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 - Proxy support for TCP connections via SOCKS4, SOCKS5, and HTTP CONNECT with `-x`, `-X`, and `-P`.
 - Optional TLS mode with `--tls`.
 - Local TLS certificate generation with `--tls-gen` and `--tls-gen-force`.
+- Pass the first connected socket to stdout and exit with `-F`.
+- Set minimum TTL for incoming packets with `-m`.
+- Enable TCP MD5 signature option with `-S`.
+- DCCP mode support with `-Z`.
 
 ## Compatibility Notes
 
@@ -500,6 +504,72 @@ Use `-T <keyword>` to change the IPv4 TOS or IPv6 Traffic Class. You can use hex
 ```bash
 ncrs example.com 80 -T lowdelay -v
 ```
+
+### Pass File Descriptor (-F)
+
+Use `-F` to pass the first connected socket using `sendmsg(2)` to `stdout` and exit. This is typically used by other programs to establish a connection and then hand off the file descriptor for the parent process to use.
+
+**Terminal 1 (Server):**
+```bash
+ncrs -l 8080 -F
+```
+
+**Terminal 2 (Client):**
+```bash
+ncrs localhost 8080
+```
+
+### Minimum TTL (-m)
+
+Use `-m <ttl>` to ask the kernel to drop incoming packets whose TTL (Time To Live) or hop limit is under the specified value. This is useful for spoofing protection (e.g., BGP GTSM).
+
+**Terminal 1 (Server):**
+```bash
+sudo ncrs -l 8080 -m 255 -v
+```
+
+**Terminal 2 (Client):**
+```bash
+ncrs localhost 8080 -v
+```
+
+*Note: Setting custom socket options like `IP_MINTTL` often requires root/administrator privileges (`sudo`).*
+
+### TCP MD5 Signature (-S)
+
+Use `-S` to enable the RFC 2385 TCP MD5 signature option. This is typically used to protect BGP routing sessions.
+
+**Terminal 1 (Server):**
+```bash
+sudo ncrs -l 179 -S -v
+```
+
+**Terminal 2 (Client):**
+```bash
+sudo ncrs target_ip 179 -S -v
+```
+
+*Note: Enabling `TCP_MD5SIG` require root privileges (`sudo`). Additionally, the actual MD5 password must be configured in the OS networking stack beforehand (e.g., via `ip tcp_metrics` on Linux). `ncrs` simply enables the socket option.*
+
+*Note: The actual MD5 password must be configured in the OS networking stack beforehand. `ncrs` simply enables the `TCP_MD5SIG` socket option on the connection.*
+
+### DCCP Mode (-Z)
+
+Use `-Z` to select DCCP (Datagram Congestion Control Protocol) mode.
+
+**Terminal 1 (Server):**
+```bash
+ncrs -l 8080 -Z -v
+```
+
+**Terminal 2 (Client):**
+```bash
+ncrs localhost 8080 -Z -v
+```
+
+*Note: In `ncrs`, this is currently a stub returning an "unsupported error", as DCCP is not universally supported by the async networking stack across all platforms.*
+
+*Note: In `ncrs`, this is currently a stub returning an unsupported error, as DCCP is not universally supported across all platforms.*
 
 ### TLS Mode
 
