@@ -179,7 +179,7 @@ fn spawn_stdin_reader() -> mpsc::UnboundedReceiver<Vec<u8>> {
 async fn udp_idle_timeout(read_timeout: Option<std::time::Duration>) -> anyhow::Result<()> {
     if let Some(timeout_duration) = read_timeout {
         tokio::time::sleep(timeout_duration).await;
-        
+
         Err(anyhow::anyhow!(
             "UDP receive timed out after {}s",
             timeout_duration.as_secs()

@@ -52,7 +52,7 @@ pub fn resolve_client_cert_path() -> anyhow::Result<Option<PathBuf>> {
     }
 
     let local_cert = Path::new("cert.pem");
-    
+
     if local_cert.exists() {
         return Ok(Some(local_cert.to_path_buf()));
     }

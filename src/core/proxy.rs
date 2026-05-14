@@ -295,7 +295,7 @@ async fn http_connect_handshake(
     }
 
     let status_code = parts[1];
-    
+
     if !status_code.starts_with('2') {
         return Err(anyhow!("HTTP proxy connection failed: {}", status_line));
     }

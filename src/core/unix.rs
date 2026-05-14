@@ -101,6 +101,6 @@ fn bind_unix_listener(path: &str, debug: bool) -> anyhow::Result<UnixListener> {
     }
 
     eprintln!("{} Listening on {}...", "[*]".yellow(), path);
-    
+
     Ok(listener)
 }

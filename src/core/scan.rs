@@ -55,7 +55,7 @@ pub(crate) async fn run_port_scan(options: ScanOptions) -> anyhow::Result<()> {
 
         handles.push(tokio::spawn(async move {
             let timeout = std::time::Duration::from_secs(timeout_secs);
-            
+
             if let Ok(addr) = resolve_address(&t, port, family, timeout, numeric).await
                 && connect_tcp(addr, timeout, &socket).await.is_ok()
                 && verbose

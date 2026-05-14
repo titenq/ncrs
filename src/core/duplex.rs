@@ -260,7 +260,7 @@ where
     }
 
     writer.flush().await?;
-    
+
     Ok(copied)
 }
 

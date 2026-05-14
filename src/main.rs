@@ -177,21 +177,27 @@ async fn main() -> anyhow::Result<()> {
     }
 
     if args.scan {
-        if let Some(target) = args.target {
-            core::run_port_scan(core::ScanOptions {
-                target,
-                ports: all_ports,
-                timeout_secs: connect_timeout,
-                verbose: args.verbose,
-                family,
-                source_addr: args.source_addr,
-                source_port: args.source_port,
-                numeric: args.numeric,
-                interval: args.interval,
-                debug: args.debug,
-            })
-            .await?;
+        let Some(target) = args.target else {
+            return Err(anyhow::anyhow!("Scan mode requires a destination"));
+        };
+
+        if all_ports.is_empty() {
+            return Err(anyhow::anyhow!("Scan mode requires at least one port"));
         }
+
+        core::run_port_scan(core::ScanOptions {
+            target,
+            ports: all_ports,
+            timeout_secs: connect_timeout,
+            verbose: args.verbose,
+            family,
+            source_addr: args.source_addr,
+            source_port: args.source_port,
+            numeric: args.numeric,
+            interval: args.interval,
+            debug: args.debug,
+        })
+        .await?;
     } else if args.udp {
         let port = if args.listen {
             match all_ports.first().copied().or(target_as_port) {
@@ -239,7 +245,7 @@ async fn main() -> anyhow::Result<()> {
                     "[*]".blue()
                 );
             }
-            
+
             core::run_server_persistent(core::TcpServerOptions {
                 port,
                 verbose: args.verbose,
@@ -284,6 +290,8 @@ async fn main() -> anyhow::Result<()> {
             "{} Error: Usage ncrs [target] [port] or ncrs -l [port]",
             "[!]".red()
         );
+
+        std::process::exit(1);
     }
 
     Ok(())

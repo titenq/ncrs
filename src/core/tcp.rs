@@ -307,7 +307,7 @@ async fn bind_listener(
             "DCCP mode (-Z) is not currently supported by tokio networking."
         ));
     }
-    
+
     let addr = match family {
         AddressFamily::Any | AddressFamily::Ipv4 => format!("0.0.0.0:{}", port),
         AddressFamily::Ipv6 => format!("[::]:{}", port),
