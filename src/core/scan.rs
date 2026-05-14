@@ -1,69 +1,66 @@
 use crate::core::address::{AddressFamily, parse_numeric_address, resolve_address};
-use crate::core::tcp::connect_tcp;
+use crate::core::tcp::{TcpSocketOptions, connect_tcp};
 use colored::*;
 use std::sync::Arc;
 
-pub async fn run_port_scan(
-    target: String,
-    ports: Vec<u16>,
-    timeout_secs: u64,
-    verbose: bool,
-    family: AddressFamily,
-    source_addr: Option<String>,
-    source_port: Option<u16>,
-    numeric: bool,
-    interval: Option<u64>,
-    debug: bool,
-) -> anyhow::Result<()> {
-    if numeric {
-        let port = ports.first().copied().unwrap_or(0);
-        parse_numeric_address(&target, port, family)?;
+#[derive(Clone, Debug)]
+pub(crate) struct ScanOptions {
+    pub target: String,
+    pub ports: Vec<u16>,
+    pub timeout_secs: u64,
+    pub verbose: bool,
+    pub family: AddressFamily,
+    pub source_addr: Option<String>,
+    pub source_port: Option<u16>,
+    pub numeric: bool,
+    pub interval: Option<u64>,
+    pub debug: bool,
+}
+
+pub(crate) async fn run_port_scan(options: ScanOptions) -> anyhow::Result<()> {
+    if options.numeric {
+        let port = options.ports.first().copied().unwrap_or(0);
+
+        parse_numeric_address(&options.target, port, options.family)?;
     }
 
-    let target = Arc::new(target);
+    let target = Arc::new(options.target);
     let mut handles = vec![];
 
-    if verbose {
+    if options.verbose {
         eprintln!(
             "{} Scanning {} ports on {}...",
             "[*]".yellow(),
-            ports.len(),
+            options.ports.len(),
             target
         );
     }
 
-    for port in ports {
-        if let Some(delay) = interval {
+    for port in options.ports {
+        if let Some(delay) = options.interval {
             tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
         }
 
         let t = Arc::clone(&target);
-        let source_addr = source_addr.clone();
+        let socket = TcpSocketOptions {
+            source_addr: options.source_addr.clone(),
+            source_port: options.source_port,
+            debug: options.debug,
+            ..Default::default()
+        };
+        let family = options.family;
+        let numeric = options.numeric;
+        let timeout_secs = options.timeout_secs;
+        let verbose = options.verbose;
 
         handles.push(tokio::spawn(async move {
             let timeout = std::time::Duration::from_secs(timeout_secs);
-            if let Ok(addr) = resolve_address(&t, port, family, timeout, numeric).await {
-                if connect_tcp(
-                    addr,
-                    source_addr.as_deref(),
-                    source_port,
-                    timeout,
-                    debug,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    false,
-                    false,
-                )
-                .await
-                .is_ok()
-                {
-                    if verbose {
-                        eprintln!("{} port {} open", "Connection to".green(), port);
-                    }
-                }
+            
+            if let Ok(addr) = resolve_address(&t, port, family, timeout, numeric).await
+                && connect_tcp(addr, timeout, &socket).await.is_ok()
+                && verbose
+            {
+                eprintln!("{} port {} open", "Connection to".green(), port);
             }
         }));
     }
@@ -72,7 +69,7 @@ pub async fn run_port_scan(
         let _ = h.await;
     }
 
-    if verbose {
+    if options.verbose {
         eprintln!("{} Scan complete.", "[*]".yellow());
     }
 

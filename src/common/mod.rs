@@ -5,14 +5,15 @@ pub fn parse_port_range(port_str: &str) -> Vec<u16> {
 
     if port_str.contains('-') {
         let parts: Vec<&str> = port_str.split('-').collect();
-        if parts.len() == 2 {
-            if let (Ok(start), Ok(end)) = (parts[0].parse::<u16>(), parts[1].parse::<u16>()) {
-                if start <= end {
-                    return (start..=end).collect();
-                }
-            }
+
+        if parts.len() == 2
+            && let (Ok(start), Ok(end)) = (parts[0].parse::<u16>(), parts[1].parse::<u16>())
+            && start <= end
+        {
+            return (start..=end).collect();
         }
     }
+
     vec![]
 }
 
@@ -32,6 +33,7 @@ pub fn set_socket_debug<S: AsRawFd>(socket: &S) -> std::io::Result<()> {
             std::mem::size_of_val(&optval) as libc::socklen_t,
         )
     };
+
     if ret == -1 {
         Err(std::io::Error::last_os_error())
     } else {
@@ -54,8 +56,8 @@ pub fn parse_tos(tos: &str) -> Option<u8> {
         "throughput" => Some(0x08),
         "reliability" => Some(0x04),
         _ => {
-            if tos.starts_with("0x") {
-                u8::from_str_radix(&tos[2..], 16).ok()
+            if let Some(hex) = tos.strip_prefix("0x") {
+                u8::from_str_radix(hex, 16).ok()
             } else {
                 tos.parse::<u8>().ok()
             }
@@ -86,6 +88,7 @@ pub fn set_socket_ttl<S: AsRawFd>(socket: &S, ttl: u32, is_ipv4: bool) -> std::i
             )
         }
     };
+
     if ret == -1 {
         Err(std::io::Error::last_os_error())
     } else {
@@ -121,6 +124,7 @@ pub fn set_socket_tos<S: AsRawFd>(socket: &S, tos: u8, is_ipv4: bool) -> std::io
             )
         }
     };
+
     if ret == -1 {
         Err(std::io::Error::last_os_error())
     } else {
@@ -133,10 +137,10 @@ pub fn set_socket_tos<S>(_: &S, _: u8, _: bool) -> std::io::Result<()> {
     Ok(())
 }
 
-
 #[cfg(unix)]
 pub fn pass_fd_and_exit<S: std::os::unix::io::AsRawFd>(socket: &S) -> anyhow::Result<()> {
-    use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
+    use nix::sys::socket::{ControlMessage, MsgFlags, sendmsg};
+
     let fd = socket.as_raw_fd();
     let cmsg = [ControlMessage::ScmRights(&[fd])];
     let iov = [std::io::IoSlice::new(b"x")];
@@ -164,6 +168,7 @@ pub fn set_socket_minttl<S: AsRawFd>(socket: &S, minttl: u32) -> std::io::Result
             std::mem::size_of_val(&optval) as libc::socklen_t,
         )
     };
+
     if ret == -1 {
         Err(std::io::Error::last_os_error())
     } else {
@@ -189,6 +194,7 @@ pub fn set_socket_tcp_md5sig<S: AsRawFd>(socket: &S) -> std::io::Result<()> {
             std::mem::size_of_val(&optval) as libc::socklen_t,
         )
     };
+
     if ret == -1 {
         Err(std::io::Error::last_os_error())
     } else {

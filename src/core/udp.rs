@@ -7,48 +7,57 @@ use tokio::io::{self, AsyncWriteExt};
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 
-pub async fn run_udp_node(
-    target: Option<String>,
-    port: u16,
-    listen: bool,
-    verbose: bool,
-    family: AddressFamily,
-    source_addr: Option<String>,
-    source_port: Option<u16>,
-    numeric: bool,
-    read_timeout: Option<std::time::Duration>,
-    broadcast: bool,
-    debug: bool,
-    recv_limit: Option<u32>,
-    ttl: Option<u32>,
-    tos: Option<u8>,
-) -> anyhow::Result<()> {
-    let addr = udp_bind_addr(listen, port, family, source_addr.as_deref(), source_port)?;
+#[derive(Clone, Debug)]
+pub(crate) struct UdpOptions {
+    pub target: Option<String>,
+    pub port: u16,
+    pub listen: bool,
+    pub verbose: bool,
+    pub family: AddressFamily,
+    pub source_addr: Option<String>,
+    pub source_port: Option<u16>,
+    pub numeric: bool,
+    pub read_timeout: Option<std::time::Duration>,
+    pub broadcast: bool,
+    pub debug: bool,
+    pub recv_limit: Option<u32>,
+    pub ttl: Option<u32>,
+    pub tos: Option<u8>,
+}
+
+pub(crate) async fn run_udp_node(options: UdpOptions) -> anyhow::Result<()> {
+    let addr = udp_bind_addr(
+        options.listen,
+        options.port,
+        options.family,
+        options.source_addr.as_deref(),
+        options.source_port,
+    )?;
 
     let socket = UdpSocket::bind(&addr).await?;
 
-    if let Some(t) = ttl {
+    if let Some(t) = options.ttl {
         let _ = crate::common::set_socket_ttl(&socket, t, addr.is_ipv4());
     }
 
-    if let Some(t) = tos {
+    if let Some(t) = options.tos {
         let _ = crate::common::set_socket_tos(&socket, t, addr.is_ipv4());
     }
 
-    if broadcast {
+    if options.broadcast {
         socket.set_broadcast(true)?;
     }
-    
-    if debug {
+
+    if options.debug {
         let _ = crate::common::set_socket_debug(&socket);
     }
 
     let r_socket = Arc::new(socket);
     let s_socket = Arc::clone(&r_socket);
 
-    if verbose {
-        if listen {
-            eprintln!("{} UDP listening on port {}", "[*]".yellow(), port);
+    if options.verbose {
+        if options.listen {
+            eprintln!("{} UDP listening on port {}", "[*]".yellow(), options.port);
         } else {
             eprintln!(
                 "{} UDP socket bound to local port {}",
@@ -58,19 +67,19 @@ pub async fn run_udp_node(
         }
     }
 
-    if listen {
+    if options.listen {
         let mut buf = [0u8; 65535];
-        let (len, peer) = recv_from_with_timeout(&r_socket, &mut buf, read_timeout).await?;
+        let (len, peer) = recv_from_with_timeout(&r_socket, &mut buf, options.read_timeout).await?;
 
         io::stdout().write_all(&buf[..len]).await?;
         io::stdout().flush().await?;
 
-        if verbose {
+        if options.verbose {
             eprintln!("\n{} UDP packet received from {}", "[+]".green(), peer);
         }
 
         tokio::select! {
-            res = udp_idle_timeout(read_timeout) => res,
+            res = udp_idle_timeout(options.read_timeout) => res,
             res = async {
                 let mut stdin_rx = spawn_stdin_reader();
                 while let Some(data) = stdin_rx.recv().await {
@@ -82,35 +91,40 @@ pub async fn run_udp_node(
                 let mut recv_buf = [0u8; 65535];
                 let mut reads = 1; // Since we already read one packet before the loop on line 52
 
-                if let Some(limit) = recv_limit {
-                    if reads >= limit {
-                        return anyhow::Ok(());
-                    }
+                if let Some(limit) = options.recv_limit
+                    && reads >= limit
+                {
+                    return anyhow::Ok(());
                 }
 
                 loop {
-                    let (n, _) = recv_from_with_timeout(&r_socket, &mut recv_buf, read_timeout).await?;
+                    let (n, _) = recv_from_with_timeout(&r_socket, &mut recv_buf, options.read_timeout).await?;
+
                     io::stdout().write_all(&recv_buf[..n]).await?;
                     io::stdout().flush().await?;
+
                     reads += 1;
-                    if let Some(limit) = recv_limit {
-                        if reads >= limit {
-                            break anyhow::Ok(());
-                        }
+
+                    if let Some(limit) = options.recv_limit
+                        && reads >= limit
+                    {
+                        break anyhow::Ok(());
                     }
                 }
             } => res,
         }
     } else {
-        let target_str = target.ok_or_else(|| anyhow::anyhow!("Target required"))?;
-        let target_addr = if numeric {
-            parse_numeric_address(&target_str, port, family)?.to_string()
+        let target_str = options
+            .target
+            .ok_or_else(|| anyhow::anyhow!("Target required"))?;
+        let target_addr = if options.numeric {
+            parse_numeric_address(&target_str, options.port, options.family)?.to_string()
         } else {
-            format_endpoint(&target_str, port)
+            format_endpoint(&target_str, options.port)
         };
 
         tokio::select! {
-            res = udp_idle_timeout(read_timeout) => res,
+            res = udp_idle_timeout(options.read_timeout) => res,
             res = async {
                 let mut stdin_rx = spawn_stdin_reader();
                 while let Some(data) = stdin_rx.recv().await {
@@ -122,14 +136,17 @@ pub async fn run_udp_node(
                 let mut recv_buf = [0u8; 65535];
                 let mut reads = 0;
                 loop {
-                    let (n, _) = recv_from_with_timeout(&r_socket, &mut recv_buf, read_timeout).await?;
+                    let (n, _) = recv_from_with_timeout(&r_socket, &mut recv_buf, options.read_timeout).await?;
+
                     io::stdout().write_all(&recv_buf[..n]).await?;
                     io::stdout().flush().await?;
+
                     reads += 1;
-                    if let Some(limit) = recv_limit {
-                        if reads >= limit {
-                            break anyhow::Ok(());
-                        }
+
+                    if let Some(limit) = options.recv_limit
+                        && reads >= limit
+                    {
+                        break anyhow::Ok(());
                     }
                 }
             } => res,
@@ -162,6 +179,7 @@ fn spawn_stdin_reader() -> mpsc::UnboundedReceiver<Vec<u8>> {
 async fn udp_idle_timeout(read_timeout: Option<std::time::Duration>) -> anyhow::Result<()> {
     if let Some(timeout_duration) = read_timeout {
         tokio::time::sleep(timeout_duration).await;
+        
         Err(anyhow::anyhow!(
             "UDP receive timed out after {}s",
             timeout_duration.as_secs()

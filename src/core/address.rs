@@ -1,6 +1,6 @@
 use std::net::{IpAddr, SocketAddr};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum AddressFamily {
     Any,
     Ipv4,
@@ -37,7 +37,7 @@ pub(crate) async fn resolve_address(
     }
 
     let endpoint = format_endpoint(target, port);
-    let addrs =
+    let mut addrs =
         match tokio::time::timeout(timeout_duration, tokio::net::lookup_host(&endpoint)).await {
             Ok(Ok(iter)) => iter,
             Ok(Err(e)) => return Err(anyhow::anyhow!("Failed to resolve {}: {}", endpoint, e)),
@@ -50,12 +50,11 @@ pub(crate) async fn resolve_address(
         };
 
     addrs
-        .filter(|addr| match family {
+        .find(|addr| match family {
             AddressFamily::Any => true,
             AddressFamily::Ipv4 => addr.is_ipv4(),
             AddressFamily::Ipv6 => addr.is_ipv6(),
         })
-        .next()
         .ok_or_else(|| anyhow::anyhow!("Could not resolve to any {} address", family.label()))
 }
 

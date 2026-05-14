@@ -2,6 +2,12 @@
 name = "ncrs"
 version = "0.1.0"
 edition = "2024"
+description = "A Rust implementation inspired by Netcat."
+license = "GPL-3.0-only"
+authors = ["TitenQ <titenq@gmail.com>"]
+homepage = "https://github.com/titenq/ncrs"
+repository = "https://github.com/titenq/ncrs"
+readme = "README.md"
 
 [dependencies]
 tokio = { version = "1.36", features = ["full"] }
@@ -20,3 +26,27 @@ rand = "0.10.1"
 base64 = "0.22.1"
 nix = { version = "0.31.3", features = ["socket", "uio"] }
 socket2 = { version = "0.6.3", features = ["all"] }
+
+[package.metadata.deb]
+maintainer = "TitenQ <titenq@gmail.com>"
+copyright = "2026, TitenQ"
+license-file = ["LICENSE.txt", "0"]
+depends = "$auto"
+section = "net"
+priority = "optional"
+assets = [
+  ["target/release/ncrs", "usr/bin/", "755"],
+  ["README.md", "usr/share/doc/ncrs/README.md", "644"],
+  ["LICENSE.txt", "usr/share/doc/ncrs/LICENSE.txt", "644"],
+]
+
+[package.metadata.generate-rpm]
+assets = [
+  { source = "target/release/ncrs", dest = "/usr/bin/ncrs", mode = "755" },
+  { source = "README.md", dest = "/usr/share/doc/ncrs/README.md", mode = "644" },
+  { source = "LICENSE.txt", dest = "/usr/share/doc/ncrs/LICENSE.txt", mode = "644" },
+]
+
+[package.metadata.wix]
+path-guid = "9D43F88C-0E8A-4CC0-80CB-9773A19F0F13"
+upgrade-guid = "02A0F3B8-4E1E-40D8-AE18-9902E62E013B"

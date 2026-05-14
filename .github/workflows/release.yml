@@ -5,29 +5,153 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
-  build-and-release:
-    name: Build and Release
-    runs-on: ${{ matrix.os }}
+  linux-packages:
+    name: Linux packages
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install packaging tools
+        run: cargo install cargo-deb cargo-generate-rpm
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Strip binary
+        run: strip target/release/ncrs
+
+      - name: Build deb package
+        run: cargo deb --no-build --output target/release/ncrs-linux-amd64.deb
+
+      - name: Build rpm package
+        run: cargo generate-rpm --output target/release/ncrs-linux-amd64.rpm
+
+      - name: Build AppImage
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p AppDir/usr/bin AppDir/usr/share/applications AppDir/usr/share/icons/hicolor/scalable/apps
+          cp target/release/ncrs AppDir/usr/bin/ncrs
+          cat > AppDir/AppRun <<'EOF'
+          #!/bin/sh
+          HERE="$(dirname "$(readlink -f "$0")")"
+          exec "$HERE/usr/bin/ncrs" "$@"
+          EOF
+          chmod +x AppDir/AppRun
+          cat > AppDir/usr/share/applications/ncrs.desktop <<'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=ncrs
+          Comment=Netcat Rust Edition
+          Exec=ncrs
+          Icon=ncrs
+          Terminal=true
+          Categories=Network;Utility;
+          EOF
+          cat > AppDir/usr/share/icons/hicolor/scalable/apps/ncrs.svg <<'EOF'
+          <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+            <rect width="256" height="256" rx="32" fill="#111827"/>
+            <path d="M44 84h168v88H44z" fill="#0f766e"/>
+            <path d="M64 112h64v16H64zm0 32h96v16H64z" fill="#f9fafb"/>
+            <circle cx="184" cy="152" r="10" fill="#facc15"/>
+          </svg>
+          EOF
+          cp AppDir/usr/share/applications/ncrs.desktop AppDir/ncrs.desktop
+          cp AppDir/usr/share/icons/hicolor/scalable/apps/ncrs.svg AppDir/ncrs.svg
+          curl -L -o appimagetool \
+            https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+          ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool AppDir target/release/ncrs-linux-amd64.AppImage
+
+      - name: Package raw Linux binary
+        run: tar -C target/release -czf target/release/ncrs-linux-amd64.tar.gz ncrs
+
+      - name: Upload Linux release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/release/ncrs-linux-amd64.deb
+            target/release/ncrs-linux-amd64.rpm
+            target/release/ncrs-linux-amd64.AppImage
+            target/release/ncrs-linux-amd64.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  windows-packages:
+    name: Windows packages
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install WiX Toolset
+        run: choco install wixtoolset --no-progress
+
+      - name: Configure WiX Toolset
+        shell: pwsh
+        run: |
+          $wixRoot = "${env:ProgramFiles(x86)}\WiX Toolset v3.14"
+          if (!(Test-Path $wixRoot)) {
+            $wixRoot = "${env:ProgramFiles(x86)}\WiX Toolset v3.11"
+          }
+          if (!(Test-Path $wixRoot)) {
+            throw "WiX Toolset installation directory was not found."
+          }
+          "WIX=$wixRoot\" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "$wixRoot\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Install cargo-wix
+        run: cargo install cargo-wix
+
+      - name: Build
+        run: cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Package Windows exe
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          Copy-Item target\x86_64-pc-windows-msvc\release\ncrs.exe dist\ncrs-windows-amd64.exe
+
+      - name: Build msi package
+        shell: pwsh
+        run: |
+          cargo wix init --force --manufacturer "TitenQ"
+          cargo wix --no-build --target x86_64-pc-windows-msvc --target-bin-dir target\x86_64-pc-windows-msvc\release --output dist\ncrs-windows-amd64.msi
+
+      - name: Upload Windows release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/ncrs-windows-amd64.exe
+            dist/ncrs-windows-amd64.msi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  macos-packages:
+    name: macOS packages
+    runs-on: macos-latest
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
-            artifact_name: ncrs
-            asset_name: ncrs-linux-amd64
-            target: x86_64-unknown-linux-gnu
-          - os: windows-latest
-            artifact_name: ncrs.exe
-            asset_name: ncrs-windows-amd64.exe
-            target: x86_64-pc-windows-msvc
-          - os: macos-latest
-            artifact_name: ncrs
-            asset_name: ncrs-macos-amd64
-            target: x86_64-apple-darwin
-          - os: macos-latest
-            artifact_name: ncrs
-            asset_name: ncrs-macos-arm64
-            target: aarch64-apple-darwin
+          - target: x86_64-apple-darwin
+            arch: amd64
+          - target: aarch64-apple-darwin
+            arch: arm64
 
     steps:
       - name: Checkout code
@@ -41,17 +165,28 @@ jobs:
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Rename Asset
+      - name: Package macOS binary
         shell: bash
-        run: mv target/${{ matrix.target }}/release/${{ matrix.artifact_name }} ${{ matrix.asset_name }}
+        run: |
+          set -euxo pipefail
+          mkdir -p dist pkgroot/usr/local/bin
+          cp target/${{ matrix.target }}/release/ncrs dist/ncrs-macos-${{ matrix.arch }}
+          cp dist/ncrs-macos-${{ matrix.arch }} pkgroot/usr/local/bin/ncrs
+          chmod 755 pkgroot/usr/local/bin/ncrs
+          pkgbuild \
+            --root pkgroot \
+            --identifier com.titenq.ncrs \
+            --version "${GITHUB_REF_NAME#v}" \
+            --install-location / \
+            dist/ncrs-macos-${{ matrix.arch }}.pkg
+          tar -C dist -czf dist/ncrs-macos-${{ matrix.arch }}.tar.gz ncrs-macos-${{ matrix.arch }}
 
-      - name: Strip binary (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: strip ${{ matrix.asset_name }}
-
-      - name: Upload Release Asset
+      - name: Upload macOS release assets
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ matrix.asset_name }}
+          files: |
+            dist/ncrs-macos-${{ matrix.arch }}
+            dist/ncrs-macos-${{ matrix.arch }}.pkg
+            dist/ncrs-macos-${{ matrix.arch }}.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

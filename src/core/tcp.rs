@@ -1,6 +1,6 @@
 use crate::core::address::{AddressFamily, format_endpoint, resolve_address};
 use crate::core::duplex::{
-    convert_lf_to_crlf, handle_duplex, handle_duplex_with_input, handle_duplex_with_timeout,
+    DuplexOptions, convert_lf_to_crlf, handle_duplex, handle_duplex_with_input,
 };
 use crate::tls;
 use colored::*;
@@ -15,35 +15,78 @@ use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_rustls::rustls::{ClientConfig, RootCertStore, ServerConfig};
 use tokio_rustls::{TlsAcceptor, TlsConnector};
 
+#[derive(Clone, Debug, Default)]
+pub(crate) struct TcpSocketOptions {
+    pub source_addr: Option<String>,
+    pub source_port: Option<u16>,
+    pub debug: bool,
+    pub recv_bytes: Option<u32>,
+    pub send_bytes: Option<u32>,
+    pub ttl: Option<u32>,
+    pub tos: Option<u8>,
+    pub minttl: Option<u32>,
+    pub tcp_md5sig: bool,
+    pub dccp: bool,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct TcpClientOptions {
+    pub target: String,
+    pub port: u16,
+    pub verbose: bool,
+    pub tls: bool,
+    pub timeout_secs: u64,
+    pub family: AddressFamily,
+    pub numeric: bool,
+    pub duplex: DuplexOptions,
+    pub socket: TcpSocketOptions,
+    pub proxy: Option<String>,
+    pub proxy_type: Option<String>,
+    pub proxy_username: Option<String>,
+    pub pass_fd: bool,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct TcpServerOptions {
+    pub port: u16,
+    pub verbose: bool,
+    pub tls: bool,
+    pub family: AddressFamily,
+    pub duplex: DuplexOptions,
+    pub socket: TcpSocketOptions,
+    pub pass_fd: bool,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ServerStreamOptions {
+    verbose: bool,
+    tls: bool,
+    duplex: DuplexOptions,
+    pass_fd: bool,
+}
+
 pub(crate) async fn connect_tcp(
     target_addr: SocketAddr,
-    source_addr: Option<&str>,
-    source_port: Option<u16>,
     timeout_duration: std::time::Duration,
-    debug: bool,
-    recv_bytes: Option<u32>,
-    send_bytes: Option<u32>,
-    ttl: Option<u32>,
-    tos: Option<u8>,
-    minttl: Option<u32>,
-    tcp_md5sig: bool,
-    dccp: bool,
+    options: &TcpSocketOptions,
 ) -> anyhow::Result<TcpStream> {
-    if dccp {
-        return Err(anyhow::anyhow!("DCCP mode (-Z) is not currently supported by tokio networking."));
+    if options.dccp {
+        return Err(anyhow::anyhow!(
+            "DCCP mode (-Z) is not currently supported by tokio networking."
+        ));
     }
-    
-    let local_ip = match source_addr {
+
+    let local_ip = match options.source_addr.as_deref() {
         Some(addr) => Some(addr.parse::<IpAddr>()?),
         None => None,
     };
 
-    if let Some(ip) = local_ip {
-        if target_addr.is_ipv4() != ip.is_ipv4() {
-            return Err(anyhow::anyhow!(
-                "Source address family does not match target address family"
-            ));
-        }
+    if let Some(ip) = local_ip
+        && target_addr.is_ipv4() != ip.is_ipv4()
+    {
+        return Err(anyhow::anyhow!(
+            "Source address family does not match target address family"
+        ));
     }
 
     let socket = if target_addr.is_ipv4() {
@@ -52,35 +95,35 @@ pub(crate) async fn connect_tcp(
         TcpSocket::new_v6()?
     };
 
-    if debug {
+    if options.debug {
         let _ = crate::common::set_socket_debug(&socket);
     }
 
-    if let Some(size) = recv_bytes {
+    if let Some(size) = options.recv_bytes {
         socket.set_recv_buffer_size(size)?;
     }
 
-    if let Some(size) = send_bytes {
+    if let Some(size) = options.send_bytes {
         socket.set_send_buffer_size(size)?;
     }
 
-    if let Some(t) = ttl {
+    if let Some(t) = options.ttl {
         let _ = crate::common::set_socket_ttl(&socket, t, target_addr.is_ipv4());
     }
 
-    if let Some(t) = tos {
+    if let Some(t) = options.tos {
         let _ = crate::common::set_socket_tos(&socket, t, target_addr.is_ipv4());
     }
 
-    if let Some(mttl) = minttl {
+    if let Some(mttl) = options.minttl {
         let _ = crate::common::set_socket_minttl(&socket, mttl);
     }
 
-    if tcp_md5sig {
+    if options.tcp_md5sig {
         let _ = crate::common::set_socket_tcp_md5sig(&socket);
     }
 
-    if local_ip.is_some() || source_port.is_some() {
+    if local_ip.is_some() || options.source_port.is_some() {
         let ip = local_ip.unwrap_or_else(|| {
             if target_addr.is_ipv4() {
                 IpAddr::V4(Ipv4Addr::UNSPECIFIED)
@@ -88,7 +131,9 @@ pub(crate) async fn connect_tcp(
                 IpAddr::V6(Ipv6Addr::UNSPECIFIED)
             }
         });
-        let local_addr = SocketAddr::new(ip, source_port.unwrap_or(0));
+
+        let local_addr = SocketAddr::new(ip, options.source_port.unwrap_or(0));
+
         socket.bind(local_addr)?;
     }
 
@@ -107,41 +152,28 @@ pub(crate) async fn connect_tcp(
     }
 }
 
-pub async fn run_client(
-    target: String,
-    port: u16,
-    verbose: bool,
-    tls: bool,
-    timeout_secs: u64,
-    family: AddressFamily,
-    crlf: bool,
-    source_addr: Option<String>,
-    source_port: Option<u16>,
-    numeric: bool,
-    read_timeout: Option<std::time::Duration>,
-    shutdown_on_eof: bool,
-    no_stdin: bool,
-    quit_delay: Option<i32>,
-    interval: Option<u64>,
-    debug: bool,
-    recv_bytes: Option<u32>,
-    send_bytes: Option<u32>,
-    recv_limit: Option<u32>,
-    proxy: Option<String>,
-    proxy_type: Option<String>,
-    proxy_username: Option<String>,
-    ttl: Option<u32>,
-    tos: Option<u8>,
-    telnet: bool,
-    pass_fd: bool,
-    minttl: Option<u32>,
-    tcp_md5sig: bool,
-    dccp: bool,
-) -> anyhow::Result<()> {
+pub(crate) async fn run_client(options: TcpClientOptions) -> anyhow::Result<()> {
+    let TcpClientOptions {
+        target,
+        port,
+        verbose,
+        tls,
+        timeout_secs,
+        family,
+        numeric,
+        duplex,
+        socket,
+        proxy,
+        proxy_type,
+        proxy_username,
+        pass_fd,
+    } = options;
+
     let addr = format_endpoint(&target, port);
 
     if verbose {
         let mode = if numeric { "numeric" } else { family.label() };
+
         eprintln!("{} [{}] Connecting to {}...", "[*]".yellow(), mode, addr);
     }
 
@@ -159,38 +191,23 @@ pub async fn run_client(
         } else {
             eprintln!("{} Resolved to: {}", "[*]".yellow(), target_addr);
         }
+
         eprintln!("{} Connecting...", "[*]".yellow());
     }
 
     let stream = if let Some(proxy_addr) = proxy {
-        crate::core::proxy::connect_via_proxy(
-            &proxy_addr,
-            proxy_type.as_deref(),
-            proxy_username.as_deref(),
-            &target,
-            port,
+        crate::core::proxy::connect_via_proxy(crate::core::proxy::ProxyOptions {
+            proxy_addr,
+            proxy_type,
+            proxy_username,
+            target_host: target.clone(),
+            target_port: port,
             timeout_duration,
-            source_addr.as_deref(),
-            source_port,
-            debug,
-        )
+            socket: socket.clone(),
+        })
         .await?
     } else {
-        connect_tcp(
-            target_addr,
-            source_addr.as_deref(),
-            source_port,
-            timeout_duration,
-            debug,
-            recv_bytes,
-            send_bytes,
-            ttl,
-            tos,
-            minttl,
-            tcp_md5sig,
-            dccp,
-        )
-        .await?
+        connect_tcp(target_addr, timeout_duration, &socket).await?
     };
 
     if tls {
@@ -219,140 +236,42 @@ pub async fn run_client(
             crate::common::pass_fd_and_exit(&tls_stream)?;
         }
 
-        print_connected(verbose, crlf);
+        print_connected(verbose, duplex.crlf);
 
-        if let Some(timeout_duration) = read_timeout {
-            handle_duplex_with_timeout(
-                tls_stream,
-                crlf,
-                timeout_duration,
-                shutdown_on_eof,
-                no_stdin,
-                quit_delay,
-                interval,
-                recv_limit,
-                telnet,
-            )
-            .await
-        } else {
-            handle_duplex(
-                tls_stream,
-                crlf,
-                shutdown_on_eof,
-                no_stdin,
-                quit_delay,
-                interval,
-                recv_limit,
-                telnet,
-            )
-            .await
-        }
+        handle_duplex(tls_stream, duplex).await
     } else {
         if pass_fd {
             crate::common::pass_fd_and_exit(&stream)?;
         }
 
-        print_connected(verbose, crlf);
-        if let Some(timeout_duration) = read_timeout {
-            handle_duplex_with_timeout(
-                stream,
-                crlf,
-                timeout_duration,
-                shutdown_on_eof,
-                no_stdin,
-                quit_delay,
-                interval,
-                recv_limit,
-                telnet,
-            )
-            .await
-        } else {
-            handle_duplex(
-                stream,
-                crlf,
-                shutdown_on_eof,
-                no_stdin,
-                quit_delay,
-                interval,
-                recv_limit,
-                telnet,
-            )
-            .await
-        }
+        print_connected(verbose, duplex.crlf);
+        handle_duplex(stream, duplex).await
     }
 }
 
-pub async fn run_server(
-    port: u16,
-    verbose: bool,
-    tls: bool,
-    family: AddressFamily,
-    crlf: bool,
-    read_timeout: Option<std::time::Duration>,
-    shutdown_on_eof: bool,
-    no_stdin: bool,
-    quit_delay: Option<i32>,
-    interval: Option<u64>,
-    debug: bool,
-    recv_bytes: Option<u32>,
-    send_bytes: Option<u32>,
-    recv_limit: Option<u32>,
-    ttl: Option<u32>,
-    tos: Option<u8>,
-    telnet: bool,
-    pass_fd: bool,
-    minttl: Option<u32>,
-    tcp_md5sig: bool,
-    dccp: bool,
-) -> anyhow::Result<()> {
-    let listener = bind_listener(port, family, debug, recv_bytes, send_bytes, ttl, tos, minttl, tcp_md5sig, dccp).await?;
+pub(crate) async fn run_server(options: TcpServerOptions) -> anyhow::Result<()> {
+    let listener = bind_listener(options.port, options.family, &options.socket).await?;
     let (stream, remote_addr) = listener.accept().await?;
 
     handle_server_stream(
         stream,
         remote_addr,
-        verbose,
-        tls,
-        crlf,
-        read_timeout,
-        shutdown_on_eof,
-        no_stdin,
-        quit_delay,
-        interval,
-        recv_limit,
-        telnet,
-        pass_fd,
+        ServerStreamOptions {
+            verbose: options.verbose,
+            tls: options.tls,
+            duplex: options.duplex,
+            pass_fd: options.pass_fd,
+        },
     )
     .await
 }
 
-pub async fn run_server_persistent(
-    port: u16,
-    verbose: bool,
-    tls: bool,
-    family: AddressFamily,
-    crlf: bool,
-    read_timeout: Option<std::time::Duration>,
-    shutdown_on_eof: bool,
-    no_stdin: bool,
-    quit_delay: Option<i32>,
-    interval: Option<u64>,
-    debug: bool,
-    recv_bytes: Option<u32>,
-    send_bytes: Option<u32>,
-    recv_limit: Option<u32>,
-    ttl: Option<u32>,
-    tos: Option<u8>,
-    telnet: bool,
-    pass_fd: bool,
-    minttl: Option<u32>,
-    tcp_md5sig: bool,
-    dccp: bool,
-) -> anyhow::Result<()> {
-    let listener = bind_listener(port, family, debug, recv_bytes, send_bytes, ttl, tos, minttl, tcp_md5sig, dccp).await?;
+pub(crate) async fn run_server_persistent(options: TcpServerOptions) -> anyhow::Result<()> {
+    let listener = bind_listener(options.port, options.family, &options.socket).await?;
     let (input_tx, _) = broadcast::channel(16);
-    if !no_stdin {
-        spawn_stdin_forwarder(input_tx.clone(), crlf);
+
+    if !options.duplex.no_stdin {
+        spawn_stdin_forwarder(input_tx.clone(), options.duplex.crlf);
     }
 
     loop {
@@ -362,22 +281,18 @@ pub async fn run_server_persistent(
         if let Err(e) = handle_server_stream_with_input(
             stream,
             remote_addr,
-            verbose,
-            tls,
             input_rx,
-            read_timeout,
-            shutdown_on_eof,
-            quit_delay,
-            interval,
-            recv_limit,
-            telnet,
-            pass_fd,
+            ServerStreamOptions {
+                verbose: options.verbose,
+                tls: options.tls,
+                duplex: options.duplex,
+                pass_fd: options.pass_fd,
+            },
         )
         .await
+            && options.verbose
         {
-            if verbose {
-                eprintln!("{} Connection closed or error: {}", "[!]".red(), e);
-            }
+            eprintln!("{} Connection closed or error: {}", "[!]".red(), e);
         }
     }
 }
@@ -385,18 +300,14 @@ pub async fn run_server_persistent(
 async fn bind_listener(
     port: u16,
     family: AddressFamily,
-    debug: bool,
-    recv_bytes: Option<u32>,
-    send_bytes: Option<u32>,
-    ttl: Option<u32>,
-    tos: Option<u8>,
-    minttl: Option<u32>,
-    tcp_md5sig: bool,
-    dccp: bool,
+    options: &TcpSocketOptions,
 ) -> anyhow::Result<TcpListener> {
-    if dccp {
-        return Err(anyhow::anyhow!("DCCP mode (-Z) is not currently supported by tokio networking."));
+    if options.dccp {
+        return Err(anyhow::anyhow!(
+            "DCCP mode (-Z) is not currently supported by tokio networking."
+        ));
     }
+    
     let addr = match family {
         AddressFamily::Any | AddressFamily::Ipv4 => format!("0.0.0.0:{}", port),
         AddressFamily::Ipv6 => format!("[::]:{}", port),
@@ -408,33 +319,33 @@ async fn bind_listener(
         TcpSocket::new_v4()?
     };
 
-    if debug {
+    if options.debug {
         let _ = crate::common::set_socket_debug(&socket);
     }
 
-    if let Some(size) = recv_bytes {
+    if let Some(size) = options.recv_bytes {
         socket.set_recv_buffer_size(size)?;
     }
 
-    if let Some(size) = send_bytes {
+    if let Some(size) = options.send_bytes {
         socket.set_send_buffer_size(size)?;
     }
 
     let is_ipv4 = !matches!(family, AddressFamily::Ipv6);
 
-    if let Some(t) = ttl {
+    if let Some(t) = options.ttl {
         let _ = crate::common::set_socket_ttl(&socket, t, is_ipv4);
     }
 
-    if let Some(t) = tos {
+    if let Some(t) = options.tos {
         let _ = crate::common::set_socket_tos(&socket, t, is_ipv4);
     }
 
-    if let Some(mttl) = minttl {
+    if let Some(mttl) = options.minttl {
         let _ = crate::common::set_socket_minttl(&socket, mttl);
     }
 
-    if tcp_md5sig {
+    if options.tcp_md5sig {
         let _ = crate::common::set_socket_tcp_md5sig(&socket);
     }
 
@@ -444,11 +355,7 @@ async fn bind_listener(
     socket.bind(local_addr)?;
     let listener = socket.listen(1024)?;
 
-    if debug {
-        eprintln!("{} Listening on {}...", "[*]".yellow(), addr);
-    } else {
-        eprintln!("{} Listening on {}...", "[*]".yellow(), addr);
-    }
+    eprintln!("{} Listening on {}...", "[*]".yellow(), addr);
 
     Ok(listener)
 }
@@ -456,24 +363,14 @@ async fn bind_listener(
 async fn handle_server_stream(
     stream: TcpStream,
     remote_addr: SocketAddr,
-    verbose: bool,
-    tls: bool,
-    crlf: bool,
-    read_timeout: Option<std::time::Duration>,
-    shutdown_on_eof: bool,
-    no_stdin: bool,
-    quit_delay: Option<i32>,
-    interval: Option<u64>,
-    recv_limit: Option<u32>,
-    telnet: bool,
-    pass_fd: bool,
+    options: ServerStreamOptions,
 ) -> anyhow::Result<()> {
-    if verbose {
+    if options.verbose {
         eprintln!("{} Connection from {}", "[+]".green(), remote_addr);
     }
 
-    if tls {
-        if verbose {
+    if options.tls {
+        if options.verbose {
             eprintln!("{} Loading certificates and private key...", "[*]".yellow());
         }
 
@@ -493,96 +390,38 @@ async fn handle_server_stream(
 
         let acceptor = TlsAcceptor::from(Arc::new(config));
 
-        if verbose {
+        if options.verbose {
             eprintln!("{} Waiting for TLS handshake...", "[*]".yellow());
         }
 
         let tls_stream = acceptor.accept(stream).await?;
 
-        if verbose {
+        if options.verbose {
             eprintln!("{} TLS Handshake successful!", "[+]".green());
         }
 
-        if let Some(timeout_duration) = read_timeout {
-            handle_duplex_with_timeout(
-                tls_stream,
-                crlf,
-                timeout_duration,
-                shutdown_on_eof,
-                no_stdin,
-                quit_delay,
-                interval,
-                recv_limit,
-                telnet,
-            )
-            .await
-        } else {
-            handle_duplex(
-                tls_stream,
-                crlf,
-                shutdown_on_eof,
-                no_stdin,
-                quit_delay,
-                interval,
-                recv_limit,
-                telnet,
-            )
-            .await
-        }
+        handle_duplex(tls_stream, options.duplex).await
     } else {
-        if pass_fd {
+        if options.pass_fd {
             crate::common::pass_fd_and_exit(&stream)?;
         }
 
-        if let Some(timeout_duration) = read_timeout {
-            handle_duplex_with_timeout(
-                stream,
-                crlf,
-                timeout_duration,
-                shutdown_on_eof,
-                no_stdin,
-                quit_delay,
-                interval,
-                recv_limit,
-                telnet,
-            )
-            .await
-        } else {
-            handle_duplex(
-                stream,
-                crlf,
-                shutdown_on_eof,
-                no_stdin,
-                quit_delay,
-                interval,
-                recv_limit,
-                telnet,
-            )
-            .await
-        }
+        handle_duplex(stream, options.duplex).await
     }
 }
 
 async fn handle_server_stream_with_input(
     stream: TcpStream,
     remote_addr: SocketAddr,
-    verbose: bool,
-    tls: bool,
     input_rx: broadcast::Receiver<Vec<u8>>,
-    read_timeout: Option<std::time::Duration>,
-    shutdown_on_eof: bool,
-    quit_delay: Option<i32>,
-    interval: Option<u64>,
-    recv_limit: Option<u32>,
-    telnet: bool,
-    pass_fd: bool,
+    options: ServerStreamOptions,
 ) -> anyhow::Result<()> {
-    if verbose {
+    if options.verbose {
         eprintln!("{} Connection from {}", "[+]".green(), remote_addr);
     }
 
-    if tls {
-        if verbose {
+    if options.tls {
+        if options.verbose {
             eprintln!("{} Loading certificates and private key...", "[*]".yellow());
         }
 
@@ -602,47 +441,27 @@ async fn handle_server_stream_with_input(
 
         let acceptor = TlsAcceptor::from(Arc::new(config));
 
-        if verbose {
+        if options.verbose {
             eprintln!("{} Waiting for TLS handshake...", "[*]".yellow());
         }
 
         let tls_stream = acceptor.accept(stream).await?;
 
-        if verbose {
+        if options.verbose {
             eprintln!("{} TLS Handshake successful!", "[+]".green());
         }
 
-        if pass_fd {
+        if options.pass_fd {
             crate::common::pass_fd_and_exit(&tls_stream)?;
         }
 
-        handle_duplex_with_input(
-            tls_stream,
-            input_rx,
-            read_timeout,
-            shutdown_on_eof,
-            quit_delay,
-            interval,
-            recv_limit,
-            telnet,
-        )
-        .await
+        handle_duplex_with_input(tls_stream, input_rx, options.duplex).await
     } else {
-        if pass_fd {
+        if options.pass_fd {
             crate::common::pass_fd_and_exit(&stream)?;
         }
 
-        handle_duplex_with_input(
-            stream,
-            input_rx,
-            read_timeout,
-            shutdown_on_eof,
-            quit_delay,
-            interval,
-            recv_limit,
-            telnet,
-        )
-        .await
+        handle_duplex_with_input(stream, input_rx, options.duplex).await
     }
 }
 
