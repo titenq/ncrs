@@ -37,6 +37,11 @@ impl ChildGuard {
     pub fn wait(&mut self) {
         let _ = self.child.wait();
     }
+
+    pub fn kill(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
 }
 
 impl Drop for ChildGuard {
