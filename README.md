@@ -41,7 +41,7 @@ Developed by **TitenQ** | [titenq.com.br](https://titenq.com.br) | [titenq@gmail
 - Pass the first connected socket to stdout and exit with `-F`.
 - Set minimum TTL for incoming packets with `-m`.
 - Enable TCP MD5 signature option with `-S`.
-- DCCP mode support with `-Z`.
+- Experimental DCCP flag with `-Z` currently exposed as a documented unsupported stub.
 
 ## Compatibility Notes
 
@@ -72,7 +72,7 @@ Options:
   -T, --tos <KEYWORD>            Change IPv4 TOS or IPv6 traffic class value
   -m, --minttl <TTL>             Ask the kernel to drop incoming packets whose TTL/hop limit is under minttl
   -S, --tcp-md5sig               Enable the RFC 2385 TCP MD5 signature option
-  -Z, --dccp                     DCCP mode (currently a stub returning an unsupported error)
+  -Z, --dccp                     [EXPERIMENTAL/STUB] DCCP mode; currently returns an unsupported error
   -F, --pass-fd                  Pass the first connected socket using sendmsg(2) to stdout and exit
   -C, --crlf                     Send CRLF as line-ending
   -d, --no-stdin                 Do not attempt to read from stdin
@@ -555,7 +555,7 @@ sudo ncrs target_ip 179 -S -v
 
 ### DCCP Mode (-Z)
 
-Use `-Z` to select DCCP (Datagram Congestion Control Protocol) mode.
+Use `-Z` to select DCCP (Datagram Congestion Control Protocol) mode. This flag is currently exposed for compatibility tracking only and returns an unsupported error.
 
 **Terminal 1 (Server):**
 ```bash
@@ -567,9 +567,7 @@ ncrs -l 8080 -Z -v
 ncrs localhost 8080 -Z -v
 ```
 
-*Note: In `ncrs`, this is currently a stub returning an "unsupported error", as DCCP is not universally supported by the async networking stack across all platforms.*
-
-*Note: In `ncrs`, this is currently a stub returning an unsupported error, as DCCP is not universally supported across all platforms.*
+*Note: DCCP is not implemented yet because it is not universally supported by the async networking stack across all platforms.*
 
 ### TLS Mode
 
@@ -631,11 +629,29 @@ ncrs/
 │   ├── cli.rs
 │   ├── main.rs
 │   └── tls.rs
+├── tests/
+│   ├── cli.rs
+│   ├── support/
+│   │   └── mod.rs
+│   ├── tcp.rs
+│   ├── tls.rs
+│   ├── udp.rs
+│   └── unix.rs
 ├── Cargo.lock
 ├── Cargo.toml
 ├── LICENSE.txt
 └── README.md
 ```
+
+## Testing
+
+Run the full test suite with:
+
+```bash
+cargo test
+```
+
+The integration tests exercise TCP client/listener flows, port scanning, CRLF conversion, telnet negotiation replies, persistent listen mode, SOCKS5 and HTTP CONNECT proxy handshakes, TLS, UDP, and Unix Domain Sockets.
 
 ## Disclaimer
 

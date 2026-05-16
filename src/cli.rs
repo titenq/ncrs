@@ -144,7 +144,7 @@ pub struct Args {
     #[arg(short = 'S', long = "tcp-md5sig")]
     pub tcp_md5sig: bool,
 
-    /// [Flag: -Z] DCCP mode
+    /// [Flag: -Z] [EXPERIMENTAL/STUB] DCCP mode; currently returns an unsupported error
     #[arg(short = 'Z', long = "dccp")]
     pub dccp: bool,
 
