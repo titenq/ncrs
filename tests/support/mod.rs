@@ -3,7 +3,7 @@
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, UdpSocket};
 use std::path::PathBuf;
-use std::process::{Child, ChildStderr, Command};
+use std::process::{Child, ChildStderr, Command, ExitStatus};
 use std::sync::mpsc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -36,6 +36,10 @@ impl ChildGuard {
 
     pub fn wait(&mut self) {
         let _ = self.child.wait();
+    }
+
+    pub fn wait_status(&mut self) -> ExitStatus {
+        self.child.wait().expect("failed to wait for child")
     }
 
     pub fn kill(&mut self) {

@@ -65,3 +65,53 @@ fn tls_client_sends_data_to_listener() {
 
     assert_eq!(buf, b"hello tls\n");
 }
+
+#[test]
+fn plain_client_to_tls_listener_fails() {
+    let port = free_tcp_port();
+    let config_dir = unique_temp_path("tls-mismatch-config");
+    std::fs::create_dir_all(&config_dir).expect("failed to create test config dir");
+
+    let tls_gen = ncrs()
+        .arg("--tls-gen-force")
+        .env("XDG_CONFIG_HOME", &config_dir)
+        .output()
+        .expect("failed to run ncrs --tls-gen-force");
+
+    assert!(tls_gen.status.success());
+
+    let mut listener_cmd = ncrs();
+    listener_cmd
+        .arg("--tls")
+        .arg("-l")
+        .arg(port.to_string())
+        .arg("-v")
+        .arg("-d")
+        .env("XDG_CONFIG_HOME", &config_dir)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+
+    let mut listener = spawn(&mut listener_cmd);
+    wait_for_stderr(&mut listener, "Listening on");
+
+    let mut client_cmd = ncrs();
+    client_cmd
+        .arg("127.0.0.1")
+        .arg(port.to_string())
+        .arg("-N")
+        .arg("-q")
+        .arg("0")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+
+    let mut client = spawn(&mut client_cmd);
+    write_stdin_and_close(&mut client, b"plain text\n");
+    client.wait();
+    let listener_status = listener.wait_status();
+
+    let _ = std::fs::remove_dir_all(&config_dir);
+
+    assert!(!listener_status.success());
+}

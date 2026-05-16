@@ -258,23 +258,21 @@ pub(crate) async fn run_server_persistent(options: TcpServerOptions) -> anyhow::
     loop {
         let (stream, remote_addr) = listener.accept().await?;
         let input_rx = input_tx.subscribe();
+        let stream_options = ServerStreamOptions {
+            verbose: options.verbose,
+            tls: options.tls,
+            duplex: options.duplex,
+            pass_fd: options.pass_fd,
+        };
 
-        if let Err(e) = handle_server_stream_with_input(
-            stream,
-            remote_addr,
-            input_rx,
-            ServerStreamOptions {
-                verbose: options.verbose,
-                tls: options.tls,
-                duplex: options.duplex,
-                pass_fd: options.pass_fd,
-            },
-        )
-        .await
-            && options.verbose
-        {
-            eprintln!("{} Connection closed or error: {}", "[!]".red(), e);
-        }
+        tokio::spawn(async move {
+            if let Err(e) =
+                handle_server_stream_with_input(stream, remote_addr, input_rx, stream_options).await
+                && stream_options.verbose
+            {
+                eprintln!("{} Connection closed or error: {}", "[!]".red(), e);
+            }
+        });
     }
 }
 

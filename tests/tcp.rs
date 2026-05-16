@@ -1,10 +1,10 @@
 mod support;
 
-use std::io::{Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::process::Stdio;
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use support::{free_tcp_port, ncrs, spawn, wait_for_stderr, write_stdin_and_close};
 
@@ -211,6 +211,111 @@ fn persistent_listener_accepts_sequential_clients() {
 }
 
 #[test]
+fn persistent_listener_handles_concurrent_clients() {
+    let port = free_tcp_port();
+
+    let mut listener_cmd = ncrs();
+    listener_cmd
+        .arg("-l")
+        .arg("-k")
+        .arg(port.to_string())
+        .arg("-v")
+        .arg("-d")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let mut listener = spawn(&mut listener_cmd);
+    wait_for_stderr(&mut listener, "Listening on");
+
+    let stdout = listener.take_stdout();
+    let (tx, rx) = mpsc::channel();
+
+    std::thread::spawn(move || {
+        let mut reader = BufReader::new(stdout);
+
+        for _ in 0..2 {
+            let mut line = String::new();
+
+            reader
+                .read_line(&mut line)
+                .expect("failed to read listener stdout line");
+            tx.send(line).expect("failed to send listener line");
+        }
+    });
+
+    let mut first =
+        TcpStream::connect(("127.0.0.1", port)).expect("failed to connect first client");
+    first
+        .write_all(b"first\n")
+        .expect("failed to write first client data");
+
+    let mut second =
+        TcpStream::connect(("127.0.0.1", port)).expect("failed to connect second client");
+    second
+        .write_all(b"second\n")
+        .expect("failed to write second client data");
+
+    let mut lines = vec![
+        rx.recv_timeout(Duration::from_secs(5))
+            .expect("timed out waiting for first listener line"),
+        rx.recv_timeout(Duration::from_secs(5))
+            .expect("timed out waiting for second listener line"),
+    ];
+
+    listener.kill();
+    lines.sort();
+
+    assert_eq!(lines, ["first\n".to_string(), "second\n".to_string()]);
+}
+
+#[test]
+fn read_timeout_exits_within_requested_window() {
+    let server = TcpListener::bind(("127.0.0.1", 0)).expect("failed to bind timeout test server");
+    let port = server.local_addr().expect("missing local addr").port();
+
+    std::thread::spawn(move || {
+        let (_stream, _) = server.accept().expect("failed to accept timeout client");
+        std::thread::sleep(Duration::from_secs(3));
+    });
+
+    let start = Instant::now();
+    let output = ncrs()
+        .arg("127.0.0.1")
+        .arg(port.to_string())
+        .arg("-d")
+        .arg("-w")
+        .arg("1")
+        .output()
+        .expect("failed to run timeout client");
+
+    assert!(output.status.success());
+    assert!(start.elapsed() < Duration::from_secs(3));
+}
+
+#[test]
+fn randomize_ports_scan_does_not_crash() {
+    let first_port = free_tcp_port();
+    let second_port = free_tcp_port();
+
+    let output = ncrs()
+        .arg("-z")
+        .arg("-r")
+        .arg("127.0.0.1")
+        .arg(first_port.to_string())
+        .arg(second_port.to_string())
+        .output()
+        .expect("failed to run randomized scan");
+
+    assert!(output.status.success());
+}
+
+#[test]
+fn socks4_proxy_forwards_client_data() {
+    proxy_forwards_client_data(ProxyKind::Socks4);
+}
+
+#[test]
 fn socks5_proxy_forwards_client_data() {
     proxy_forwards_client_data(ProxyKind::Socks5);
 }
@@ -240,6 +345,7 @@ fn run_client_with_input(port: u16, input: &[u8]) {
 
 #[derive(Clone, Copy)]
 enum ProxyKind {
+    Socks4,
     Socks5,
     HttpConnect,
 }
@@ -266,6 +372,7 @@ fn proxy_forwards_client_data(kind: ProxyKind) {
         let (mut client, _) = proxy.accept().expect("failed to accept proxy client");
 
         match kind {
+            ProxyKind::Socks4 => handle_socks4_proxy(&mut client),
             ProxyKind::Socks5 => handle_socks5_proxy(&mut client),
             ProxyKind::HttpConnect => handle_http_connect_proxy(&mut client),
         }
@@ -284,6 +391,7 @@ fn proxy_forwards_client_data(kind: ProxyKind) {
         .arg(format!("127.0.0.1:{proxy_port}"))
         .arg("-X")
         .arg(match kind {
+            ProxyKind::Socks4 => "4",
             ProxyKind::Socks5 => "5",
             ProxyKind::HttpConnect => "connect",
         })
@@ -304,6 +412,33 @@ fn proxy_forwards_client_data(kind: ProxyKind) {
         .expect("timed out waiting for proxied data");
 
     assert_eq!(received, b"proxied payload\n");
+}
+
+fn handle_socks4_proxy(client: &mut TcpStream) {
+    let mut header = [0u8; 8];
+
+    client
+        .read_exact(&mut header)
+        .expect("failed to read SOCKS4 request header");
+
+    assert_eq!(header[0], 4);
+    assert_eq!(header[1], 1);
+
+    let mut user_byte = [0u8; 1];
+
+    loop {
+        client
+            .read_exact(&mut user_byte)
+            .expect("failed to read SOCKS4 user id");
+
+        if user_byte[0] == 0 {
+            break;
+        }
+    }
+
+    client
+        .write_all(&[0, 0x5a, 0, 0, 0, 0, 0, 0])
+        .expect("failed to write SOCKS4 success response");
 }
 
 fn handle_socks5_proxy(client: &mut TcpStream) {
