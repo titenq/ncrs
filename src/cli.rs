@@ -1,7 +1,7 @@
 use clap::Parser;
 
 #[derive(Parser, Debug)]
-#[command(name = "ncrs", author = "TitenQ", version = "0.1.0")]
+#[command(name = "ncrs", author = "TitenQ", version = "0.2.0")]
 pub struct Args {
     /// Target IP address or Hostname
     #[arg(value_name = "destination")]

@@ -127,7 +127,7 @@ To trigger a release:
 git commit -m "feat: your new feature"
 
 # 2. Create a version tag
-git tag v0.1.0
+git tag v0.2.0
 
 # 3. Push the tags to GitHub
 git push origin --tags
