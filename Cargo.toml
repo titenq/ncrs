@@ -1,6 +1,6 @@
 [package]
 name = "ncrs"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 description = "A Rust implementation inspired by Netcat."
 license = "GPL-3.0-only"
