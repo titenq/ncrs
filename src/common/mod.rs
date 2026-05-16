@@ -142,7 +142,8 @@ pub fn pass_fd_and_exit<S: std::os::unix::io::AsRawFd>(socket: &S) -> anyhow::Re
     use nix::sys::socket::{ControlMessage, MsgFlags, sendmsg};
 
     let fd = socket.as_raw_fd();
-    let cmsg = [ControlMessage::ScmRights(&[fd])];
+    let fds = [fd];
+    let cmsg = [ControlMessage::ScmRights(&fds)];
     let iov = [std::io::IoSlice::new(b"x")];
     let stdout_fd = 1;
 
