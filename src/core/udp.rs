@@ -69,10 +69,7 @@ pub(crate) async fn run_udp_node(options: UdpOptions) -> anyhow::Result<()> {
 
     if options.listen {
         let mut buf = [0u8; 65535];
-        let (len, peer) = recv_from_with_timeout(&r_socket, &mut buf, options.read_timeout).await?;
-
-        io::stdout().write_all(&buf[..len]).await?;
-        io::stdout().flush().await?;
+        let (_, peer) = receive_udp_packet(&r_socket, &mut buf, options.read_timeout).await?;
 
         if options.verbose {
             eprintln!("\n{} UDP packet received from {}", "[+]".green(), peer);
@@ -88,29 +85,7 @@ pub(crate) async fn run_udp_node(options: UdpOptions) -> anyhow::Result<()> {
                 anyhow::Ok(())
             } => res,
             res = async {
-                let mut recv_buf = [0u8; 65535];
-                let mut reads = 1; // Since we already read one packet before the loop on line 52
-
-                if let Some(limit) = options.recv_limit
-                    && reads >= limit
-                {
-                    return anyhow::Ok(());
-                }
-
-                loop {
-                    let (n, _) = recv_from_with_timeout(&r_socket, &mut recv_buf, options.read_timeout).await?;
-
-                    io::stdout().write_all(&recv_buf[..n]).await?;
-                    io::stdout().flush().await?;
-
-                    reads += 1;
-
-                    if let Some(limit) = options.recv_limit
-                        && reads >= limit
-                    {
-                        break anyhow::Ok(());
-                    }
-                }
+                receive_udp_packets(&r_socket, options.read_timeout, options.recv_limit, 1).await
             } => res,
         }
     } else {
@@ -133,22 +108,7 @@ pub(crate) async fn run_udp_node(options: UdpOptions) -> anyhow::Result<()> {
                 anyhow::Ok(())
             } => res,
             res = async {
-                let mut recv_buf = [0u8; 65535];
-                let mut reads = 0;
-                loop {
-                    let (n, _) = recv_from_with_timeout(&r_socket, &mut recv_buf, options.read_timeout).await?;
-
-                    io::stdout().write_all(&recv_buf[..n]).await?;
-                    io::stdout().flush().await?;
-
-                    reads += 1;
-
-                    if let Some(limit) = options.recv_limit
-                        && reads >= limit
-                    {
-                        break anyhow::Ok(());
-                    }
-                }
+                receive_udp_packets(&r_socket, options.read_timeout, options.recv_limit, 0).await
             } => res,
         }
     }
@@ -157,7 +117,7 @@ pub(crate) async fn run_udp_node(options: UdpOptions) -> anyhow::Result<()> {
 fn spawn_stdin_reader() -> mpsc::UnboundedReceiver<Vec<u8>> {
     let (tx, rx) = mpsc::unbounded_channel();
 
-    std::thread::spawn(move || {
+    tokio::task::spawn_blocking(move || {
         let mut stdin = std::io::stdin();
         let mut buf = [0u8; 65535];
 
@@ -174,6 +134,41 @@ fn spawn_stdin_reader() -> mpsc::UnboundedReceiver<Vec<u8>> {
     });
 
     rx
+}
+
+async fn receive_udp_packets(
+    socket: &UdpSocket,
+    read_timeout: Option<std::time::Duration>,
+    recv_limit: Option<u32>,
+    mut received: u32,
+) -> anyhow::Result<()> {
+    if recv_limit.is_some_and(|limit| received >= limit) {
+        return Ok(());
+    }
+
+    let mut recv_buf = [0u8; 65535];
+
+    loop {
+        receive_udp_packet(socket, &mut recv_buf, read_timeout).await?;
+        received += 1;
+
+        if recv_limit.is_some_and(|limit| received >= limit) {
+            return Ok(());
+        }
+    }
+}
+
+async fn receive_udp_packet(
+    socket: &UdpSocket,
+    buf: &mut [u8],
+    read_timeout: Option<std::time::Duration>,
+) -> anyhow::Result<(usize, SocketAddr)> {
+    let (n, peer) = recv_from_with_timeout(socket, buf, read_timeout).await?;
+
+    io::stdout().write_all(&buf[..n]).await?;
+    io::stdout().flush().await?;
+
+    Ok((n, peer))
 }
 
 async fn udp_idle_timeout(read_timeout: Option<std::time::Duration>) -> anyhow::Result<()> {

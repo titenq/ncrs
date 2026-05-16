@@ -211,26 +211,7 @@ pub(crate) async fn run_client(options: TcpClientOptions) -> anyhow::Result<()> 
     };
 
     if tls {
-        let mut root_cert_store = RootCertStore::empty();
-        let cert_result = rustls_native_certs::load_native_certs();
-
-        root_cert_store.add_parsable_certificates(cert_result.certs);
-
-        if let Some(cert_path) = tls::resolve_client_cert_path()? {
-            let cert_file = File::open(cert_path)?;
-            let mut reader = BufReader::new(cert_file);
-            let certs = rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?;
-
-            root_cert_store.add_parsable_certificates(certs);
-        }
-
-        let config = ClientConfig::builder()
-            .with_root_certificates(root_cert_store)
-            .with_no_client_auth();
-
-        let connector = TlsConnector::from(Arc::new(config));
-        let domain = ServerName::try_from(target.as_str())?.to_owned();
-        let tls_stream = connector.connect(domain, stream).await?;
+        let tls_stream = connect_client_tls(stream, &target).await?;
 
         if pass_fd {
             crate::common::pass_fd_and_exit(&tls_stream)?;
@@ -370,34 +351,10 @@ async fn handle_server_stream(
     }
 
     if options.tls {
-        if options.verbose {
-            eprintln!("{} Loading certificates and private key...", "[*]".yellow());
-        }
+        let tls_stream = accept_server_tls(stream, options.verbose).await?;
 
-        let tls_paths = tls::resolve_server_tls_paths()?;
-        let cert_file = File::open(tls_paths.cert)?;
-        let mut cert_reader = BufReader::new(cert_file);
-        let certs = rustls_pemfile::certs(&mut cert_reader).collect::<Result<Vec<_>, _>>()?;
-
-        let key_file = File::open(tls_paths.key)?;
-        let mut key_reader = BufReader::new(key_file);
-        let key = rustls_pemfile::private_key(&mut key_reader)?
-            .ok_or_else(|| anyhow::anyhow!("No private key found"))?;
-
-        let config = ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(certs, key)?;
-
-        let acceptor = TlsAcceptor::from(Arc::new(config));
-
-        if options.verbose {
-            eprintln!("{} Waiting for TLS handshake...", "[*]".yellow());
-        }
-
-        let tls_stream = acceptor.accept(stream).await?;
-
-        if options.verbose {
-            eprintln!("{} TLS Handshake successful!", "[+]".green());
+        if options.pass_fd {
+            crate::common::pass_fd_and_exit(&tls_stream)?;
         }
 
         handle_duplex(tls_stream, options.duplex).await
@@ -421,35 +378,7 @@ async fn handle_server_stream_with_input(
     }
 
     if options.tls {
-        if options.verbose {
-            eprintln!("{} Loading certificates and private key...", "[*]".yellow());
-        }
-
-        let tls_paths = tls::resolve_server_tls_paths()?;
-        let cert_file = File::open(tls_paths.cert)?;
-        let mut cert_reader = BufReader::new(cert_file);
-        let certs = rustls_pemfile::certs(&mut cert_reader).collect::<Result<Vec<_>, _>>()?;
-
-        let key_file = File::open(tls_paths.key)?;
-        let mut key_reader = BufReader::new(key_file);
-        let key = rustls_pemfile::private_key(&mut key_reader)?
-            .ok_or_else(|| anyhow::anyhow!("No private key found"))?;
-
-        let config = ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(certs, key)?;
-
-        let acceptor = TlsAcceptor::from(Arc::new(config));
-
-        if options.verbose {
-            eprintln!("{} Waiting for TLS handshake...", "[*]".yellow());
-        }
-
-        let tls_stream = acceptor.accept(stream).await?;
-
-        if options.verbose {
-            eprintln!("{} TLS Handshake successful!", "[+]".green());
-        }
+        let tls_stream = accept_server_tls(stream, options.verbose).await?;
 
         if options.pass_fd {
             crate::common::pass_fd_and_exit(&tls_stream)?;
@@ -463,6 +392,72 @@ async fn handle_server_stream_with_input(
 
         handle_duplex_with_input(stream, input_rx, options.duplex).await
     }
+}
+
+async fn connect_client_tls(
+    stream: TcpStream,
+    target: &str,
+) -> anyhow::Result<tokio_rustls::client::TlsStream<TcpStream>> {
+    let mut root_cert_store = RootCertStore::empty();
+    let cert_result = rustls_native_certs::load_native_certs();
+
+    root_cert_store.add_parsable_certificates(cert_result.certs);
+
+    if let Some(cert_path) = tls::resolve_client_cert_path()? {
+        let cert_file = File::open(cert_path)?;
+        let mut reader = BufReader::new(cert_file);
+        let certs = rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?;
+
+        root_cert_store.add_parsable_certificates(certs);
+    }
+
+    let config = ClientConfig::builder()
+        .with_root_certificates(root_cert_store)
+        .with_no_client_auth();
+
+    let connector = TlsConnector::from(Arc::new(config));
+    let domain = ServerName::try_from(target.to_string())?;
+
+    Ok(connector.connect(domain, stream).await?)
+}
+
+async fn accept_server_tls(
+    stream: TcpStream,
+    verbose: bool,
+) -> anyhow::Result<tokio_rustls::server::TlsStream<TcpStream>> {
+    let acceptor = TlsAcceptor::from(Arc::new(load_server_tls_config(verbose)?));
+
+    if verbose {
+        eprintln!("{} Waiting for TLS handshake...", "[*]".yellow());
+    }
+
+    let tls_stream = acceptor.accept(stream).await?;
+
+    if verbose {
+        eprintln!("{} TLS Handshake successful!", "[+]".green());
+    }
+
+    Ok(tls_stream)
+}
+
+fn load_server_tls_config(verbose: bool) -> anyhow::Result<ServerConfig> {
+    if verbose {
+        eprintln!("{} Loading certificates and private key...", "[*]".yellow());
+    }
+
+    let tls_paths = tls::resolve_server_tls_paths()?;
+    let cert_file = File::open(tls_paths.cert)?;
+    let mut cert_reader = BufReader::new(cert_file);
+    let certs = rustls_pemfile::certs(&mut cert_reader).collect::<Result<Vec<_>, _>>()?;
+
+    let key_file = File::open(tls_paths.key)?;
+    let mut key_reader = BufReader::new(key_file);
+    let key = rustls_pemfile::private_key(&mut key_reader)?
+        .ok_or_else(|| anyhow::anyhow!("No private key found"))?;
+
+    Ok(ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(certs, key)?)
 }
 
 pub(crate) fn spawn_stdin_forwarder(input_tx: broadcast::Sender<Vec<u8>>, crlf: bool) {

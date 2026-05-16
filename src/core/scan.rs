@@ -2,6 +2,9 @@ use crate::core::address::{AddressFamily, parse_numeric_address, resolve_address
 use crate::core::tcp::{TcpSocketOptions, connect_tcp};
 use colored::*;
 use std::sync::Arc;
+use tokio::sync::Semaphore;
+
+const MAX_CONCURRENT_SCANS: usize = 256;
 
 #[derive(Clone, Debug)]
 pub(crate) struct ScanOptions {
@@ -18,13 +21,24 @@ pub(crate) struct ScanOptions {
 }
 
 pub(crate) async fn run_port_scan(options: ScanOptions) -> anyhow::Result<()> {
-    if options.numeric {
-        let port = options.ports.first().copied().unwrap_or(0);
+    let first_port = options.ports.first().copied().unwrap_or(0);
+    let timeout = std::time::Duration::from_secs(options.timeout_secs);
 
-        parse_numeric_address(&options.target, port, options.family)?;
-    }
+    let resolved_target = if options.numeric {
+        parse_numeric_address(&options.target, first_port, options.family)?
+    } else {
+        resolve_address(
+            &options.target,
+            first_port,
+            options.family,
+            timeout,
+            options.numeric,
+        )
+        .await?
+    };
 
     let target = Arc::new(options.target);
+    let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_SCANS));
     let mut handles = vec![];
 
     if options.verbose {
@@ -41,25 +55,22 @@ pub(crate) async fn run_port_scan(options: ScanOptions) -> anyhow::Result<()> {
             tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
         }
 
-        let t = Arc::clone(&target);
+        let permit = Arc::clone(&semaphore).acquire_owned().await?;
         let socket = TcpSocketOptions {
             source_addr: options.source_addr.clone(),
             source_port: options.source_port,
             debug: options.debug,
             ..Default::default()
         };
-        let family = options.family;
-        let numeric = options.numeric;
-        let timeout_secs = options.timeout_secs;
+        let mut addr = resolved_target;
         let verbose = options.verbose;
 
-        handles.push(tokio::spawn(async move {
-            let timeout = std::time::Duration::from_secs(timeout_secs);
+        addr.set_port(port);
 
-            if let Ok(addr) = resolve_address(&t, port, family, timeout, numeric).await
-                && connect_tcp(addr, timeout, &socket).await.is_ok()
-                && verbose
-            {
+        handles.push(tokio::spawn(async move {
+            let _permit = permit;
+
+            if connect_tcp(addr, timeout, &socket).await.is_ok() && verbose {
                 eprintln!("{} port {} open", "Connection to".green(), port);
             }
         }));
